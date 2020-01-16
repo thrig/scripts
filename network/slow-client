@@ -1,0 +1,32 @@
+#!/usr/bin/env expect
+#
+# slow client, for when one needs to trickle data slowly to a server
+# (possibly to see if that server makes rash assumptions about what a
+# read buffer will contain)
+
+package require Tcl 8.5
+
+# https://github.com/thrig/tcl-pledge
+package require pledge
+pledge {dns inet stdio} NULL
+
+set host [lindex $argv 0]
+set port [lindex $argv 1]
+set send [lindex $argv 2]
+set wait [lindex $argv 3]
+if {$host eq ""} {set host localhost}
+if {$port eq ""} {set port 7777}
+if {$send eq ""} {set send "echo\n"}
+if {$wait eq ""} {set wait 1000}
+
+set fh [socket $host $port]
+chan configure $fh -buffering none
+after $wait send_char $fh [split $send ""]
+foreach c [split $send ""] {
+    if {[catch {puts -nonewline $fh $c} msg]} {
+        close $fh
+        puts stderr "slow-client: $msg"
+        exit 1
+    }
+    after $wait
+}

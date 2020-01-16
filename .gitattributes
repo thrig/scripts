@@ -14,4 +14,5 @@
 /network/crosstalk/sendslow linguist-language=TCL
 /network/hexip4todottedquad linguist-language=lisp
 /network/non-buffered-sink linguist-language=TCL
+/network/slow-client linguist-language=TCL
 /network/slow-echo-server linguist-language=TCL
