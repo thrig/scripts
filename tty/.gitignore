@@ -1,4 +1,5 @@
 *.o
+elideall
 gunktty
 nocolor
 nocolor-test
