@@ -1,4 +1,4 @@
-CFLAGS=-std=c99 -O3 -Wall -pedantic -fno-diagnostics-color -fstack-protector-all -fPIC -fPIE -pie -pipe
+CFLAGS=-std=c99 -O2 -Wall -pedantic -fno-diagnostics-color -fstack-protector-strong -fPIC -fPIE -pie -pipe
 
 minmda: minmda.c minmda.h files.o Makefile
 	$(CC) $(CFLAGS) `pkg-config --cflags --libs libsodium` files.o minmda.c -o minmda

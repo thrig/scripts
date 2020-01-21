@@ -1,4 +1,4 @@
-CFLAGS=-std=c99 -O3 -Wall -pedantic -fno-diagnostics-color -fstack-protector-all -fPIC -fPIE -pie -pipe
+CFLAGS=-std=c99 -O2 -Wall -pedantic -fno-diagnostics-color -fstack-protector-strong -fPIC -fPIE -pie -pipe
 
 # for OpenBSD ports; Mac OS X with MacPorts will instead need
 #   make rdcomm TCL=tcl

@@ -1,4 +1,4 @@
-CFLAGS=-std=c99 -Wall -pedantic -fno-diagnostics-color -fstack-protector-all -fPIC -fPIE -pie -pipe
+CFLAGS=-std=c99 -Wall -pedantic -fno-diagnostics-color -fstack-protector-strong -fPIC -fPIE -pie -pipe
 
 lockalot: lockalot.c
 	$(CC) $(CFLAGS) `pkg-config --cflags --libs goptfoo` lockalot.c -o lockalot
