@@ -1,0 +1,58 @@
+.Dd January 21 2020
+.Dt DNS-SERVER-VERSION 1
+.nh
+.Os
+.Sh NAME
+.Nm dns-server-version
+.Nd reports DNS server version
+.Sh SYNOPSIS
+.Bk -words
+.Nm
+.Op Fl 46n
+.Ar server
+.Op Ar port
+.Ek
+.Sh DESCRIPTION
+.Nm
+reports the DNS server version, if available. The port defaults to
+.Dv 53 .
+Options:
+.Bl -tag -width Ds
+.It Fl 4
+Use IPv4 only.
+.Dv AI_ADDRCONFIG
+is used by default in the
+.Xr getaddrinfo 3 
+calls.
+.It Fl 6
+Use IPv6 only.
+.It Fl n
+Do not perform lookups of the 
+.Ar server
+nor
+.Ar port .
+.El
+.Sh EXIT STATUS
+.Ex -std
+.Sh EXAMPLES
+Not all servers respond to the version query:
+.Pp
+.Dl $ Ic dns-server-version 9.9.9.9
+.Dl Q9-U-6.0
+.Dl $ Ic dns-server-version 8.8.8.8
+.Dl dns-server-version: no answer (rcode 2)
+.Pp
+.Nm
+makes a request similar to the following command:
+.Pp
+.Dl $ Ic dig +short -c chaos -t txt @8.8.8.8 version.bind
+.Dl ...
+.Sh SEE ALSO
+.Xr dig 1 ,
+.Xr getaddrinfo 3 
+.Bl -hang
+.It [RFC 1035]
+Domain names - implementation and specification
+.El
+.Sh AUTHOR
+.An Jeremy Mates

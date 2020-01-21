@@ -68,18 +68,23 @@ int main(int argc, char *argv[]) {
     if ((len = recv(sock, response, 512, 0)) == -1) err(1, "recv failed");
     if (len < DNS_HDR_LEN) errx(1, "response is too short");
 
+    close(sock);
+#ifdef __OpenBSD__
+    if (pledge("stdio", NULL) == -1) err(1, "pledge failed");
+#endif
+
+    // much of this is documented in RFC 1035
     uint16_t resid;
     memcpy(&resid, response, sizeof(resid));
     if (resid != reqid) warnx("id mismatch %04X %04X", reqid, resid);
 
     if ((response[2] & 0x80) >> 7 != 1) warnx("query flag set in response??");
 
-    int rcode = response[3] & 0x07;
-    if (rcode != 0) warnx("non-zero rcode %d", rcode);
-
+    int rcode     = response[3] & 0x07;
     int questions = (response[4] << 8) + response[5];
     int answers   = (response[6] << 8) + response[7];
-    if (answers == 0) err(1, "no answer");
+    if (answers == 0) errx(1, "no answer (rcode %d)", rcode);
+    if (rcode != 0) warnx("non-zero rcode %d", rcode);
 
     unsigned char *rp  = response + DNS_HDR_LEN;
     unsigned char *end = response + len;
@@ -153,7 +158,7 @@ int udp_connect(const char *host, const char *port) {
     NEXTPEER:
         peer = peer->ai_next;
     }
-    if (sock == -1) err(1, "unable to connect");
+    if (sock == -1) errx(1, "unable to connect");
     freeaddrinfo(allpeers);
     return sock;
 }
