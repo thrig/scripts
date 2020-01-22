@@ -26,9 +26,15 @@ struct addrinfo hints = {.ai_family   = AF_UNSPEC,
                          .ai_flags    = AI_ADDRCONFIG,
                          .ai_socktype = SOCK_DGRAM};
 
+// DNS replies could be larger but the version information is
+// usually short (if not would be an amplification attack vector?)
+unsigned char response[512];
+
 void emit_help(void);
+void parse_version(uint16_t reqid, unsigned char const *const response,
+                   ssize_t len);
+void skip_name(unsigned char const **const rp, unsigned char const *const end);
 int udp_connect(const char *host, const char *port);
-int skip_label(unsigned char **rp, unsigned char *end);
 
 int main(int argc, char *argv[]) {
 #ifdef __OpenBSD__
@@ -51,19 +57,14 @@ int main(int argc, char *argv[]) {
     argc -= optind;
     argv += optind;
     if (argc < 1 || argc > 2) emit_help();
-    char *host = argv[0];
-    char *port = argc == 2 ? argv[1] : "53";
 
-    int sock = udp_connect(host, port);
+    int sock = udp_connect(argv[0], argc == 2 ? argv[1] : "53");
 
     uint16_t reqid;
     arc4random_buf(&reqid, sizeof(reqid));
     memcpy(query, &reqid, sizeof(reqid));
 
     if (send(sock, query, REQLEN, 0) == -1) err(1, "send failed");
-    // DNS replies could be larger but the version information is
-    // usually short (if not would be an amplification attack vector?)
-    unsigned char response[512];
     ssize_t len;
     if ((len = recv(sock, response, 512, 0)) == -1) err(1, "recv failed");
     if (len < DNS_HDR_LEN) errx(1, "response is too short");
@@ -72,8 +73,17 @@ int main(int argc, char *argv[]) {
 #ifdef __OpenBSD__
     if (pledge("stdio", NULL) == -1) err(1, "pledge failed");
 #endif
+    parse_version(reqid, response, len);
+    exit(EXIT_SUCCESS);
+}
 
-    // much of this is documented in RFC 1035
+void emit_help(void) {
+    fputs("Usage: dns-server-version [-4 | -6] [-n] host [port]\n", stderr);
+    exit(EX_USAGE);
+}
+
+void parse_version(uint16_t reqid, unsigned char const *const response,
+                   ssize_t len) {
     uint16_t resid;
     memcpy(&resid, response, sizeof(resid));
     if (resid != reqid) warnx("id mismatch %04X %04X", reqid, resid);
@@ -86,19 +96,20 @@ int main(int argc, char *argv[]) {
     if (answers == 0) errx(1, "no answer (rcode %d)", rcode);
     if (rcode != 0) warnx("non-zero rcode %d", rcode);
 
-    unsigned char *rp  = response + DNS_HDR_LEN;
-    unsigned char *end = response + len;
+    unsigned char const *rp        = response + DNS_HDR_LEN;
+    unsigned char const *const end = response + len;
 
     for (int i = 0; i < questions; i++) {
-        // maybe '\0', QTYPE and QCLASS (16-bit)
-        rp += skip_label(&rp, end) + 4;
-        if (rp >= end) errx(1, "parsed past end of message??");
+        skip_name(&rp, end);
+        // QTYPE and QCLASS (16-bit)
+        rp += 4;
     }
 
     // assume the relevant response is in the first answer
     if (answers > 1) warnx("more than one answer??");
-    // maybe '\0', TYPE and CLASS (16-bit), TTL (32-bit)
-    rp += skip_label(&rp, end) + 8;
+    skip_name(&rp, end);
+    // TYPE and CLASS (16-bit), TTL (32-bit)
+    rp += 8;
     if (rp >= end) errx(1, "parsed past end of message??");
 
     uint16_t rdlen;
@@ -111,28 +122,24 @@ int main(int argc, char *argv[]) {
     int txtlen = *rp++;
     if (rp + txtlen > end) errx(1, "text extends past end of message??");
     printf("%.*s\n", txtlen, rp);
-
-    exit(EXIT_SUCCESS);
 }
 
-void emit_help(void) {
-    fputs("Usage: dns-server-version [-4 | -6] [-n] host [port]\n", stderr);
-    exit(EX_USAGE);
-}
-
-inline int skip_label(unsigned char **rp, unsigned char *end) {
-    int isstr = 1;
+/* [RFC 1035] "4.1.4. Message compression" gives three forms 1) sequence
+ * of labels ending in zero octet 2) pointer 3) sequence of labels
+ * ending in a pointer. so assuming this is followed and hasn't been
+ * updated since... */
+inline void skip_name(unsigned char const **const rp,
+                      unsigned char const *const end) {
+    if (*rp + 2 >= end) errx(1, "parsed past end of message??");
     while (**rp) {
-        if ((**rp & 0xC0) == 0xC0) { // 14-bit pointer to another label
+        if ((**rp & 0xC0) == 0xC0) { // 14-bit pointer (ignored)
             *rp += 2;
-            isstr = 0;
-        } else { // 6-bit label length
-            *rp += **rp + 1;
-            isstr = 1;
+            return;
+        } else { // 6-bit length and that amount
+            *rp += 1 + **rp;
         }
-        if (*rp >= end) errx(1, "parsed past end of message??");
     }
-    return isstr;
+    *rp += 1; // trailing zero octet
 }
 
 int udp_connect(const char *host, const char *port) {
