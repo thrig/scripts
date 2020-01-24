@@ -136,7 +136,9 @@ inline void skip_name(unsigned char const **const rp,
             *rp += 2;
             return;
         } else { // 6-bit length and that amount
-            *rp += 1 + **rp;
+            // high 10 and 01 are "reserved for future use" per RFC
+            if ((**rp >> 6) != 0) warnx("non-zero high bits in label length??");
+            *rp += 1 + **rp & 0x3F;
         }
     }
     *rp += 1; // trailing zero octet
