@@ -1,0 +1,5 @@
+#!/usr/bin/perl
+use 5.28.0;
+use warnings;
+use Acme::September::Eternal;
+say eternalseptemberize(@ARGV ? "@ARGV" : "now");
