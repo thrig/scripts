@@ -1,0 +1,5 @@
+File descriptors are shared between processes.
+
+Some processes take pains to read exactly by lines.
+
+These facts can be combined ...
