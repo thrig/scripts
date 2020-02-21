@@ -34,7 +34,7 @@ $cmd->run(
     stderr => qr/count value is below min/
 );
 
-# may false alarm if RNG rolls... poorly
+# may false alarm if the RNG rolls... poorly
 my %seen;
 for (1 .. 50) {
     $tcmd->run(args => "2", stdin => "a\nb\nc\nd\ne\n");
@@ -45,4 +45,13 @@ for (1 .. 50) {
 }
 eq_or_diff([ sort keys %seen ], [qw/a b c d e/]);
 
-done_testing 19
+# shuffle
+%seen = ();
+for (1 .. 60) {
+    $tcmd->run(args => "-s 2", stdin => "a\nb\nc");
+    $seen{ $tcmd->stdout }++;
+}
+eq_or_diff([ sort keys %seen ],
+    [ "a\nb\n", "a\nc\n", "b\na\n", "b\nc\n", "c\na\n", "c\nb\n" ]);
+
+done_testing 20

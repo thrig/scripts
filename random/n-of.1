@@ -1,4 +1,4 @@
-.Dd February 20 2020
+.Dd February 21 2020
 .Dt N-OF 1
 .nh
 .Os
@@ -8,13 +8,18 @@
 .Sh SYNOPSIS
 .Bk -words
 .Nm
+.Op Fl s
 .Ar count
 .Ek
 .Sh DESCRIPTION
 .Nm
 picks 
 .Ar count
-lines (or fewer) from standard input and displays them.
+lines (or fewer) from standard input and displays them, optionally
+.Fl s
+shuffling the results. Shuffling is less necessary if the amount of
+input is much larger than the
+.Ar count .
 .Sh EXIT STATUS
 .Ex -std
 .Nm
@@ -24,17 +29,18 @@ These are more or less equivalent though
 .Nm
 will be more efficient though
 .Nm
-will not shuffle the order of the items selected, beyond what happens
+will not by default shuffle the order of the items beyond what happens
 randomly as lines are selected into the internal cache.
 .Pp
-.Dl $ Ic ... \&| n-of 7
 .Dl $ Ic ... \&| shuffle \&| head -7
+.Dl $ Ic ... \&| n-of 7
 .Pp
 .Nm
 can filter down a large input list, and that can then be shuffled
 if need be:
 .Pp
-.Dl $ Ic ... \&| n-of 7 \&| shuffle
+.Dl $ Ic ... \&| n-of 3 \&| shuffle
+.Dl $ Ic ... \&| n-of -s 3
 .Sh SEE ALSO
 .Xr coinflip 1 ,
 .Xr oneof 1 ,
