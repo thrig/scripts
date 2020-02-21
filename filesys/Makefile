@@ -35,7 +35,7 @@ uvi: uvi.c
 clean:
 	git clean --force -x
 
-test: fbd fdsplit findin findup getpof llcount seek twiddle uvi
+test: fbd fdsplit findin findup getpof llcount pamei seek twiddle uvi
 	@prove --nocolor
 
 .PHONY: clean test
