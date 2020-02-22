@@ -4,16 +4,22 @@
 %x BODY
 %{
 
-#include <err.h>
 #include <ctype.h>
+#include <err.h>
 #include <sysexits.h>
+#include <unistd.h>
 
-int Flag_Header;                /* -H */
+int Flag_Header; // -H
 
 char fill = '\n';
 int indent, nl = 0;
 
-#define NEW_PP {putchar('\n'); fill = '\n'; nl = 1;}
+#define NEW_PP                                                                 \
+    {                                                                          \
+        putchar('\n');                                                         \
+        fill = '\n';                                                           \
+        nl   = 1;                                                              \
+    }
 
 %}
 %%
@@ -22,10 +28,13 @@ int indent, nl = 0;
     for (indent = yyleng - 1; indent > 0; indent--)
         if (!isspace(yytext[indent])) break;
     if (indent > 0) {
-        yytext[indent+1] = '\0';
+        yytext[indent + 1] = '\0';
         fputs(yytext, stdout);
     }
-    if (!Flag_Header) { fill = ' '; BEGIN BODY; }
+    if (!Flag_Header) {
+        fill = ' ';
+        BEGIN BODY;
+    }
 }
 \n\n   { putchar('\n'); nl = 1; BEGIN BODY; }
 \n     { putchar('\n'); nl = 1; }
@@ -37,21 +46,22 @@ int indent, nl = 0;
     /* consume leading whitespace on continuation lines */
     if (!nl) {
         while (*start != '\0') {
-    	    if (isblank(*start)) {
+            if (isblank(*start)) {
                 start++;
                 continue;
             }
             break;
-    	}
+        }
     }
     if (*start != '\0') {
         for (indent = yyleng - 1; indent > 0; indent--)
             if (!isspace(yytext[indent])) break;
         if (indent > 0) {
-            yytext[indent+1] = '\0';
+            yytext[indent + 1] = '\0';
             fputs(start, stdout);
         }
-    	fill = ' '; nl = 0;
+        fill = ' ';
+        nl   = 0;
     } else NEW_PP;
 }
 <BODY>\n\n+ NEW_PP;
@@ -65,15 +75,17 @@ int main(int argc, char *argv[]) {
     FILE *fh;
     int ch;
 
-    while((ch = getopt(argc, argv, "h?H")) != -1) {
+#ifdef __OpenBSD__
+    if (pledge("rpath stdio", NULL) == -1) err(1, "pledge failed");
+#endif
+
+    while ((ch = getopt(argc, argv, "h?H")) != -1) {
         switch (ch) {
-        case 'H':
-            Flag_Header = 1;
-            break;
+        case 'H': Flag_Header = 1; break;
         case 'h':
         case '?':
         default:
-            fprintf(stderr, "Usage: unwrap [-H] [file .. | -]\n");
+            fputs("Usage: unwrap [-H] [file .. | -]\n", stderr);
             exit(EX_USAGE);
         }
     }
