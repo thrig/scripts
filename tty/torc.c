@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
     if ((mytty = ttyname(STDIN_FILENO)) == NULL)
         errx(EX_IOERR, "could not get ttyname of stdin??");
 
-    if ((fd_list = malloc(argc * sizeof(int))) == NULL)
+    if ((fd_list = malloc(sizeof(int) * argc)) == NULL)
         err(EX_OSERR, "could not malloc() fd list");
     fd_list_len = 0;
     dead_terms = 0;

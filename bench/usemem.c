@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
         Flag_Memory /= sizeof(int);
 
         while (Flag_Memory) {
-            if ((Memory = malloc(Flag_Memory * sizeof(int))) == NULL) {
+            if ((Memory = malloc(sizeof(int) * Flag_Memory)) == NULL) {
                 Flag_Memory >>= 1;
             } else {
                 break;
@@ -170,7 +170,7 @@ int main(int argc, char *argv[])
         }
     } else {
         Flag_Memory /= sizeof(int);
-        if ((Memory = malloc(Flag_Memory * sizeof(int))) == NULL)
+        if ((Memory = malloc(sizeof(int) * Flag_Memory)) == NULL)
             err(EX_OSERR, "could not malloc() %lu ints", Flag_Memory);
     }
 

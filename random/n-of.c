@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
     size_t count = argtoul("count", argv[0], 1, INT32_MAX);
 
     char **samples;
-    if ((samples = malloc(count * sizeof(char *))) == NULL)
+    if ((samples = malloc(sizeof(char *) * count)) == NULL)
         err(EX_OSERR, "malloc failed");
 
     char *line        = NULL;

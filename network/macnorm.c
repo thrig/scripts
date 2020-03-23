@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
         emit_help();
     argv += optind;
 
-    if ((buf = malloc(Flag_Octets * 3 * sizeof(char) + 1)) == NULL)
+    if ((buf = malloc(sizeof(char) * Flag_Octets * 3 + 1)) == NULL)
         err(EX_OSERR, "malloc failed");
 
     while (*argv) {
