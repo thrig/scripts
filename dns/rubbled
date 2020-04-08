@@ -9,7 +9,7 @@
 use 5.16.0;
 use warnings;
 
-use Socket qw(:addrinfo unpack_sockaddr_in inet_ntop AF_INET);
+use Socket qw(:addrinfo unpack_sockaddr_in inet_ntop AF_INET SOCK_STREAM);
 
 # Culled from: http://cbl.abuseat.org/ http://www.sorbs.net/
 # http://www.spamhaus.org/zen/
@@ -48,16 +48,16 @@ my %RBL_TYPES = (
 
 state %rblseen;
 
-chomp( @ARGV = readline *STDIN )
+chomp(@ARGV = readline *STDIN)
   if !@ARGV
-  or ( @ARGV == 1 and $ARGV[0] eq '-' );
+  or (@ARGV == 1 and $ARGV[0] eq '-');
 
 for my $entry (@ARGV) {
-    for my $ret ( lookup($entry) ) {
+    for my $ret (lookup($entry)) {
         my @octets = segments($ret);
         next unless @octets;
         for my $rbl (@RBLS) {
-            for my $rbl_ret ( lookup( rblhost( $rbl, @octets ), 1 ) ) {
+            for my $rbl_ret (lookup(rblhost($rbl, @octets), 1)) {
                 my $result = rblresult($rbl_ret);
                 my $key    = "$rbl $result";
                 next if $rblseen{$key}++;
@@ -71,31 +71,32 @@ for my $entry (@ARGV) {
 exit 0;
 
 sub lookup {
-    my ( $lookup, $Flag_Quiet ) = @_;
+    my ($lookup, $Flag_Quiet) = @_;
     # Only IPv4, as have seen precious little spam via IPv6 as of July
     # 2014; just some random *.ru dialups, really.
-    my ( $err, @results ) = getaddrinfo( $lookup, undef, { family => AF_INET } );
-    if ( defined $err and length $err and !$Flag_Quiet ) {
+    my ($err, @results) =
+      getaddrinfo($lookup, undef, { family => AF_INET, socktype => SOCK_STREAM });
+    if (defined $err and length $err and !$Flag_Quiet) {
         warn "warning: could not lookup '$lookup': $err\n";
     }
     return @results;
 }
 
 sub rblhost {
-    my ( $rbl, @octets ) = @_;
-    return join( '.', reverse @octets ) . '.' . $rbl;
+    my ($rbl, @octets) = @_;
+    return join('.', reverse @octets) . '.' . $rbl;
 }
 
 sub rblresult {
     my $sock = shift;
-    my ( undef, $paddr ) = unpack_sockaddr_in( $sock->{addr} );
-    return inet_ntop( AF_INET, $paddr );
+    my (undef, $paddr) = unpack_sockaddr_in($sock->{addr});
+    return inet_ntop(AF_INET, $paddr);
 }
 
 sub segments {
     my $sock = shift;
     state %seen;
-    my ( undef, $paddr ) = unpack_sockaddr_in( $sock->{addr} );
+    my (undef, $paddr) = unpack_sockaddr_in($sock->{addr});
     return if $seen{$paddr}++;
-    return split /[.]/, inet_ntop( AF_INET, $paddr );
+    return split /[.]/, inet_ntop(AF_INET, $paddr);
 }
