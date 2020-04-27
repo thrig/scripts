@@ -1,0 +1,80 @@
+#!/usr/bin/env perl
+#
+# dirac - filesystem details to Ansible config blarbs. it assumes a
+# roles/{files,templates}/... tree and various other things probably
+# particular to the work Ansible repository
+
+use 5.26.0;
+use warnings;
+use experimental 'signatures';
+use Cwd qw(abs_path);
+
+my %ansibles = (
+    files => sub ($role, $type, $path, $fqpath) {
+        my $mode = sprintf "%04o", (stat $fqpath)[2] & 07777;
+        print <<"EOF";
+- name: copy /$path
+  copy: src=$path dest=/$path
+        mode=$mode owner=root group=root
+  tags: configuration
+
+EOF
+    },
+    templates => sub ($role, $type, $path, $fqpath) {
+        my $dstpath = $path =~ s/\.[^.]+$//r;
+        my $mode    = sprintf "%04o", (stat $fqpath)[2] & 07777;
+        print <<"EOF";
+- name: template /$dstpath
+  template: src=$path dest=/$dstpath
+            mode=$mode owner=root group=root
+  tags: configuration
+
+EOF
+    },
+);
+
+sub handle_dir ($dir) {
+    my $path = abs_path $dir;
+    if ($path =~ m{/roles/(.+)$}) {
+        my ($role, $type, $rest) = split '/', $1, 3;
+        if ($type eq 'files') {
+            my $mode = $rest =~ m/(?:bin|script|fcgi)/ ? '0755' : '0644';
+            print <<"EOF";
+- name: create directory /$rest
+  file: path=/$rest state=directory owner=root group=root mode=0755
+  tags: configuration
+
+- name: copy all of /$rest
+  copy: src=$rest/ dest=/$rest
+        mode=$mode owner=root group=root
+  tags: configuration
+
+EOF
+        } else {
+            die "no means to handle dir type '$type' $path\n";
+        }
+    } else {
+        die "no means to handle dir '$dir' $path\n";
+    }
+}
+
+sub handle_file ($file) {
+    my $path = abs_path $file;
+    if ($path =~ m{/roles/(.+)$}) {
+        my ($role, $type, $rest) = split '/', $1, 3;
+        die "no ansible action or '$type'\n" unless exists $ansibles{$type};
+        $ansibles{$type}->($role, $type, $rest, $path);
+    } else {
+        die "no means to handle file '$file' $path\n";
+    }
+}
+
+for my $arg (@ARGV) {
+    if (-f $arg) {
+        handle_file($arg);
+    } elsif (-d $arg) {
+        handle_dir($arg);
+    } else {
+        die "do not know how to handle '$arg'\n";
+    }
+}

@@ -1,0 +1,11 @@
+#!/bin/sh
+#
+# ym - find YAML configuration somewhere above where we are for Ansible
+set -e
+roledir=`findup -H tasks`
+if [ -z "$1" ]; then
+   rolefile=main
+else
+   rolefile=${1%.yml}
+fi
+echo "$roledir/tasks/$rolefile.yml"

@@ -1,0 +1,4 @@
+#!/bin/sh
+# poddir - find the local POD directory, presumably for subsequent
+# searching of the perldocs
+exec dirname `perldoc -l perllol`
