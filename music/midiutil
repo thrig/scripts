@@ -2,13 +2,21 @@
 #
 # MIDI utility routines for the Perl MIDI suite.
 
-use 5.16.0;
+use 5.14.0;
 use warnings;
 
 use Getopt::Long qw(GetOptionsFromArray);
 use MIDI                ();
 use Music::LilyPondUtil ();
-use Math::Random qw(random_normal);
+# TODO
+#use Math::Random qw(random_normal);
+
+# for lilypondify
+our %durmap = (
+    1920 => 1,
+    480  => 4,
+    240  => 8,
+);
 
 package PitchFoo {
     use Moo;
@@ -27,11 +35,19 @@ my %actions = (
     nixcc            => \&handle_nixcc,
     patch2instrument => \&handle_patch2instrument,
     rechannel        => \&handle_rechannel,
+    transpose        => \&handle_transpose,
 );
 
 my $action = shift // die "Usage: midiutil <action> <action-args ..>\n";
 die "midiutil: no such action: '$action'\n" if !exists $actions{$action};
 $actions{$action}->(@ARGV);
+
+sub between {
+    my ( $min, $max, $value ) = @_;
+    if    ( $value < $min ) { $min }
+    elsif ( $value > $max ) { $max }
+    else                    { $value }
+}
 
 sub change_of {
     my ( $c, $d1, $d2 ) = @_;
@@ -43,11 +59,27 @@ sub change_of {
     return 0;
 }
 
-# For when you just need to append some given note to complete out a
+# by index so that adjacent events can be poked at
+sub each_event {
+    my ( $opus, $fn ) = @_;
+    for my $track ( $opus->tracks_r->@* ) {
+        my $events = $track->events_r;
+        my $i      = 0;
+        while ( $i <= $events->$#* ) {
+            if ( $fn->( $events, $i ) == -1 ) {
+                splice $events->@*, $i, 1;
+                next;
+            }
+            $i++;
+        }
+    }
+}
+
+# for when you just need to append some given note to complete out a
 # track, but don't want to wait for Logic.app or something to crawl up
-# off the disk.
+# off the disk
 sub handle_append {
-    GetOptionsFromArray( \@_, 'spec=s' => \my $spec ) || exit 64;
+    GetOptionsFromArray( \@_, 'spec=s' => \my $spec ) or exit 64;
     my $filename = shift // die
       "Usage: midiutil append --spec=track:dtime/chan/note/velo;... midi-file [midi-file-out]\n";
     my $outfile = shift // $filename;
@@ -58,7 +90,7 @@ sub handle_append {
         $events{$track} = [ split '/', $eventstr ];
     }
 
-    my $opus = MIDI::Opus->new( { 'from_file' => $filename, } );
+    my $opus   = MIDI::Opus->new( { 'from_file' => $filename, } );
     my $tracks = $opus->tracks_r;
 
     for my $trackno ( 0 .. $#$tracks ) {
@@ -81,8 +113,7 @@ sub handle_append {
 
 sub handle_decompose {
     my $filename = shift // die "Usage: midiutil decompose midi-file\n";
-
-    my $opus = MIDI::Opus->new(
+    my $opus     = MIDI::Opus->new(
         {   'from_file'                => $filename,
             'exclusive_event_callback' => sub {
                 # KLUGE this makes some possibly rash assumptions about the
@@ -102,8 +133,7 @@ sub handle_decompose {
 
 sub handle_dump {
     my $filename = shift // die "Usage: midiutil decompose midi-file\n";
-
-    my $opus = MIDI::Opus->new( { 'from_file' => $filename, } );
+    my $opus     = MIDI::Opus->new( { 'from_file' => $filename, } );
     $opus->dump( { dump_tracks => 1 } );
 }
 
@@ -113,7 +143,7 @@ sub handle_fuzz {
     my $filename = shift // die "Usage: midiutil fuzz midi-file [midi-file-out]\n";
     my $outfile  = shift // $filename;
 
-    my $opus = MIDI::Opus->new( { 'from_file' => $filename, } );
+    my $opus   = MIDI::Opus->new( { 'from_file' => $filename, } );
     my $tracks = $opus->tracks_r;
 
     for my $mtrk (@$tracks) {
@@ -149,7 +179,7 @@ sub handle_fuzz {
                     # tempo, which lilypond puts into track #0,
                     # elsewhere
                 and $events->[ $i - 1 ][1] > 50    # sufficient padding
-              ) {
+            ) {
                 my $fuzz = int rand() * 5;
                 # The gist being to shorten the pedal down and add that
                 # time to the pedal up. I can half-pedal with no
@@ -194,7 +224,9 @@ sub handle_fuzz {
         for my $i ( 0 .. $#volumes ) {
             # fuzz the note volumes; this should most likely not cause
             # any \ff to be louder than a \fff or softer than a \f, etc.
-            $volumes[$i][4] = sprintf "%.f", random_normal( 1, $volumes[$i][4], 0.6 );
+            #$volumes[$i][4] = sprintf "%.f", random_normal( 1, $volumes[$i][4], 0.6 );
+            $volumes[$i][4] = sprintf "%.f",
+              $volumes[$i][4] - 12 + rand 4 + rand 5 + rand 6 + rand 5 + rand 4;
 
             # based on lilypond scm/midi.scm, limit volumes to roughly
             # the \ppp <-> \fff range
@@ -208,9 +240,9 @@ sub handle_fuzz {
     $opus->write_to_file($outfile);
 }
 
-# Generates all variations on standard MIDI instruments, e.g. to review
-# what a particular sound font sounds like. (This is easier than
-# templating the lilypond and then...)
+# generates all variations on standard MIDI instruments, e.g. to review
+# what a particular sound font sounds like. this is less expensive than
+# templating the lilypond and then...
 sub handle_instrumentate {
     my $filename = shift // die "Usage: midiutil instrumentate midi-file\n";
 
@@ -223,7 +255,7 @@ sub handle_instrumentate {
         my $outfile  = "inst$instrument.midi";
 
         my $tracks = $out_opus->tracks_r;
-        for my $track (@$tracks) {
+        while ( my ( $tnum, $track ) = each $tracks->@* ) {
             my $events = $track->events_r;
             my @nix_events;
             for my $ei ( 0 .. $#$events ) {
@@ -239,9 +271,11 @@ sub handle_instrumentate {
 
             splice @$events, $_, 1 for @nix_events;
 
+            $tnum-- if $tnum > 0;
+
             # and, regardless, prefix a patch change, to handle the case
             # of a track without a patch change
-            unshift @$events, [ 'patch_change', 0, 0, $instrument ];
+            unshift @$events, [ 'patch_change', 0, $tnum, $instrument ];
         }
 
         $out_opus->write_to_file($outfile);
@@ -252,31 +286,81 @@ sub handle_instrumentate {
 # also midi2ly of lilypond, but I never much liked that)
 sub handle_lilypondify {
     my $filename = shift // die "Usage: midiutil lilypondify midi-file\n";
-    my $opus = MIDI::Opus->new( { 'from_file' => $filename, } );
+    my $opus     = MIDI::Opus->new( { 'from_file' => $filename, } );
 
-    my %durmap = (
-        888 => 4,
-        444 => 8,
-        222 => 16,
-    );
+    my @on;
 
     my $tracks = $opus->tracks_r;
     for my $track (@$tracks) {
-        say "fixme = {";
         my $events = $track->events_r;
-        for my $event (@$events) {
-            next unless $event->[0] eq 'note_off';
-            say "  ", $pitchconv->pitchname( $event->[3] ), $durmap{ $event->[1] };
+        for my $e (@$events) {
+            if ( $e->[0] eq 'note_on' or $e->[1] eq 'note_off' ) {
+                if ( $e->[1] > 0 ) {
+                    lyemit( \@on, $e->[1] );
+                    @on = ();
+                }
+                push @on, [ $e->[3], $e->[4] ] if $e->[0] eq 'note_on';
+            }
         }
-        say "}";
+        use Data::Dumper;
+        warn Dumper \@on;
     }
+}
+
+sub lyemit {
+    my ( $notes, $dur ) = @_;
+    if ( @$notes == 1 ) {
+        say "  ", $pitchconv->pitchname( $notes->[0][0] ), $durmap{$dur},
+          veloof( $notes->[0][1] );
+    } else {
+        my %seen;
+        say '  <',
+          join( ' ',
+            map { $seen{ $_->[0] }++ ? () : $pitchconv->pitchname( $_->[0] ) } @$notes ),
+          '>', $durmap{$dur}, veloof( $notes->[0][1] );
+    }
+}
+
+sub veloof {
+    my ($n) = @_;
+    state $last = '';
+    # c\ffff b\fff a\ff g\f f\mf e\mp d\p c\pp b\ppp a\pppp
+    # 116    107   101  95  86   77   69  62   53    43
+    my $ret;
+    if ( $n > 111 ) {
+        $ret = "\\ffff";
+    } elsif ( $n > 104 ) {
+        $ret = "\\fff";
+    } elsif ( $n > 98 ) {
+        $ret = "\\ff";
+    } elsif ( $n > 90 ) {
+        $ret = "\\f";
+    } elsif ( $n > 81 ) {
+        $ret = "\\mf";
+    } elsif ( $n > 73 ) {
+        $ret = "\\mp";
+    } elsif ( $n > 65 ) {
+        $ret = "\\p";
+    } elsif ( $n > 57 ) {
+        $ret = "\\pp";
+    } elsif ( $n > 48 ) {
+        $ret = "\\ppp";
+    } else {
+        $ret = "\\pppp";
+    }
+    if ( $ret eq $last ) {
+        $ret = '';
+    } else {
+        $last = $ret;
+    }
+    return $ret;
 }
 
 sub handle_merge {
     die "too few filenames for merge\n" if @_ < 3;
     my $outfile = pop @_;
 
-    my $opus = MIDI::Opus->new( { 'from_file' => shift @_ } );
+    my $opus   = MIDI::Opus->new( { 'from_file' => shift @_ } );
     my $tracks = $opus->tracks_r;
 
     while (@_) {
@@ -287,15 +371,15 @@ sub handle_merge {
     $opus->write_to_file($outfile);
 }
 
-# Eliminates main volume control_change from a MIDI file. Handy if say
-# writing an organ work in which case there are likely no volume change
-# or pedal effects. (And ARIA Player due to the lilypond default volumes
-# is blasting away at distortion-inducing levels. Hypothetically.)
+# eliminates main volume control_change events. handy if say writing an
+# organ work in which case there are likely no volume change or pedal
+# effects, and ARIA Player due to the lilypond default volumes is
+# blasting away at distortion-inducing levels. hypothetically
 sub handle_nixcc {
     my $filename = shift // die "Usage: midiutil nixcc midi-file [midi-file-out]\n";
     my $outfile  = shift // $filename;
 
-    my $opus = MIDI::Opus->new( { 'from_file' => $filename, } );
+    my $opus   = MIDI::Opus->new( { 'from_file' => $filename, } );
     my $tracks = $opus->tracks_r;
 
     my $trackno = 0;
@@ -321,7 +405,7 @@ sub handle_nixcc {
                 or $events->[$i][0] eq 'time_signature'
                 or $events->[$i][0] eq 'key_signature'
                 #       or $events->[$i][0] eq 'patch_change'
-              ) {
+            ) {
                 unshift @nix, $i;
                 next;
             }
@@ -369,7 +453,6 @@ sub handle_patch2instrument {
     chomp( @ARGV = readline *STDIN )
       if !@ARGV
       or ( @ARGV == 1 and $ARGV[0] eq '-' );
-
     for my $patchnum (@ARGV) {
         say( ( @ARGV > 1 ? "$patchnum " : '' ),
             Music::LilyPondUtil->patch2instrument($patchnum) );
@@ -377,7 +460,7 @@ sub handle_patch2instrument {
 }
 
 sub handle_rechannel {
-    GetOptionsFromArray( \@_, 'spec=s' => \my $spec ) || exit 64;
+    GetOptionsFromArray( \@_, 'spec=s' => \my $spec ) or exit 64;
     my $filename = shift // die
       "Usage: midiutil rechannel --spec=track:chan;t1:c2... midi-file [midi-file-out]\n";
     my $outfile = shift // $filename;
@@ -388,7 +471,7 @@ sub handle_rechannel {
         $mappings{$track} = $chan;
     }
 
-    my $opus = MIDI::Opus->new( { 'from_file' => $filename, } );
+    my $opus   = MIDI::Opus->new( { 'from_file' => $filename, } );
     my $tracks = $opus->tracks_r;
 
     for my $trackno ( 0 .. $#$tracks ) {
@@ -407,6 +490,29 @@ sub handle_rechannel {
             }
         }
     }
-
     $opus->write_to_file($outfile);
+}
+
+sub handle_transpose {
+    GetOptionsFromArray(
+        \@_,
+        'transpose|T=i' => \my $trans,
+        'velocity|V=i'  => \my $velo
+    ) or exit 64;
+    my $filename = shift
+      // die "Usage: midiutil transpose [-T t] [-V v] midi-file [out-midi]\n";
+    my $outfile = shift // $filename;
+    $trans = defined $trans ? int $trans : 0;
+    $velo  = defined $velo  ? int $velo  : 0;
+    MIDI::Opus->new(
+        {   'from_file'      => $filename,
+            'event_callback' => sub {
+                if ( $_[0] =~ m/^note_o(?:n|ff)$/ ) {
+                    $_[3] = between( 0, 127, $_[3] + $trans );
+                    $_[4] = between( 0, 127, $_[4] + $velo );
+                }
+            },
+            'include' => \@MIDI::Event::All_events
+        }
+    )->write_to_file($outfile);
 }

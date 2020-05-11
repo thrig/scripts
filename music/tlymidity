@@ -2,7 +2,7 @@
 #
 # Wrap timidity, reading *.ly files for extra command line arguments.
 
-use 5.16.0;
+use 5.14.0;
 use warnings;
 
 use File::Basename qw(dirname);
@@ -41,11 +41,11 @@ sub parse_ly {
         # comments; save CPU by not looping past this
         last if m/^[^%]/;
 
-        if ( !@argv_additions and m/^%\s+timidity\s+([^%\n\r]+)/ ) {
+        if ( !@argv_additions and m/^%\s+timidity\s+(.+)/ ) {
             push @argv_additions, shellwords($1);
         }
-        if ( !@midiutil and m/^%\s+midiutil\s+(\w+)/aa ) {
-            push @midiutil, $1;
+        if ( !@midiutil and m/^%\s+midiutil\s+(.+)/ ) {
+            push @midiutil, shellwords($1);
         }
     }
     for my $extra (@argv_additions) {
