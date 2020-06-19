@@ -18,7 +18,7 @@ int main(void)
         err(1, "pledge failed");
 #endif
 
-    if ((fd = open("/dev/random", O_RDONLY)) == -1)
+    if ((fd = open("/dev/urandom", O_RDONLY)) == -1)
         err(1, "open failed");
 
     ret = read(fd, &number, sizeof(uint16_t));
