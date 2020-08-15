@@ -2,6 +2,7 @@
 endian
 getsockname
 ip6tomac
+ipint
 ipvalid
 macnorm
 macutil
