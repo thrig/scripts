@@ -1,0 +1,26 @@
+.Dd August 30 2020
+.Dt IPINT 1
+.nh
+.Os
+.Sh NAME
+.Nm ipint
+.Nd shows the 32-bit number of an IP address
+.Sh SYNOPSIS
+.Bk -words
+.Nm
+.Ar positive-integer-or-ipv4-address
+.Ek
+.Sh DESCRIPTION
+.Nm
+converts the given IPv4 address into a 32-bit number, or converts the
+given 32-bit number into an IPv4 address (the same number, only in
+base 256 form).
+.Sh EXIT STATUS
+.Ex -std
+.Sh EXAMPLES
+.Dl $ Ic ipint 127.0.0.1
+.Dl 2130706433
+.Dl $ Ic ipint 2130706431
+.Dl 126.255.255.255
+.Sh AUTHOR
+.An Jeremy Mates

@@ -1,0 +1,52 @@
+.Dd August 30 2020
+.Dt LOCALADDR 1
+.nh
+.Os
+.Sh NAME
+.Nm localaddr
+.Nd shows local IP addresses
+.Sh SYNOPSIS
+.Bk -words
+.Nm
+.Op Fl 46R
+.Op Ar interface-name
+.Ek
+.Sh DESCRIPTION
+.Nm
+shows local IP addresses on a system. Without an
+.Ar interface-name
+argument, all local addresses prefixed by the interface name are shown.
+The output format changes to only include the ip addresses if an
+.Ar interface-name
+is given, and addresses are only shown for that interface.
+Options:
+.Bl -tag -width Ds
+.It Fl 4
+only show IPv4 addresses.
+.It Fl 6
+only show IPv6 addresses. The default is to show both.
+.It Fl R
+perform a lookup on the addresses, if possible. Default is to show the
+numeric form.
+.El
+.Sh EXIT STATUS
+.Ex -std
+If no IP addresses are found, the exit status of
+.Dv 2
+will be used.
+.Sh EXAMPLES
+.Dl $ Ic localaddr
+.Dl lo0 ::1
+.Dl lo0 fe80:5::1
+.Dl lo0 127.0.0.1
+.Dl em0 192.0.2.1
+.Dl $ Ic localaddr -4 lo0
+.Dl 127.0.0.1
+.Dl $ Ic localaddr -4 -R lo0
+.Dl localhost
+.Sh SEE ALSO
+.Xr getifaddrs 3 ,
+.Xr getnameinfo 3 ,
+.Xr ifconfig 8
+.Sh AUTHOR
+.An Jeremy Mates

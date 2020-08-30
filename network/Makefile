@@ -3,7 +3,9 @@ CFLAGS=-std=c99 -O2 -Wall -pedantic -fno-diagnostics-color -fstack-protector-str
 endian: endian.c
 getsockname: getsockname.c
 ip6tomac: ip6tomac.c
+ipint: ipint.c
 ipvalid: ipvalid.c
+localaddr: localaddr.c
 
 macnorm: macnorm.c
 	$(CC) $(CFLAGS) `pkg-config --cflags --libs goptfoo` macnorm.c -o macnorm
@@ -30,7 +32,7 @@ validate-rsnapshot: validate-rsnapshot.c
 clean:
 	git clean --force -x
 
-test: macnorm v4addr v6addr validate-rsnapshot
+test: ipint localaddr macnorm v4addr v6addr validate-rsnapshot
 	@prove --nocolor
 
 .PHONY: clean test

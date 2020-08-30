@@ -4,6 +4,7 @@ getsockname
 ip6tomac
 ipint
 ipvalid
+localaddr
 macnorm
 macutil
 portpester
