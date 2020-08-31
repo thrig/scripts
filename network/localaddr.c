@@ -44,6 +44,7 @@ int main(int argc, char *argv[]) {
     }
     argc -= optind;
     argv += optind;
+    if (argc > 1) emit_usage();
 
     char *interface = NULL;
     if (argc == 1) { interface = *argv; }
