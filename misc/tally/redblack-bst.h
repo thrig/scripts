@@ -12,8 +12,8 @@
 #define RBBST_RED true
 #define RBBST_BLACK false
 
-typedef char *rbbst_key;                /* a unique input line */
-typedef unsigned long rbbst_value;      /* tally of times line has been seen */
+typedef char *rbbst_key;           /* a unique input line */
+typedef unsigned long rbbst_value; /* tally of times line has been seen */
 
 struct rbbst_node_t {
     rbbst_key line;
@@ -35,6 +35,6 @@ typedef struct tally_t *tally;
  * Public Functions */
 
 void rbbst_add(rbbst_key line, ssize_t linelen);
-void rbbst_tally(void);
+void rbbst_tally(int showtotal);
 
 #endif

@@ -7,17 +7,18 @@
 void emit_help(void);
 void read_lines(const char *file);
 
-int main(int argc, char *argv[])
-{
+int Flag_Total; // -t
+
+int main(int argc, char *argv[]) {
     int ch;
- 
+
 #ifdef __OpenBSD__
-    if (pledge("rpath stdio", NULL) == -1)
-        err(1, "pledge failed");
+    if (pledge("rpath stdio", NULL) == -1) err(1, "pledge failed");
 #endif
 
-    while ((ch = getopt(argc, argv, "h?")) != -1) {
+    while ((ch = getopt(argc, argv, "h?t")) != -1) {
         switch (ch) {
+        case 't': Flag_Total = 1; break;
         case 'h':
         case '?':
         default:
@@ -35,20 +36,18 @@ int main(int argc, char *argv[])
             argv++;
         }
     }
-    rbbst_tally();
+    rbbst_tally(Flag_Total);
     exit(EXIT_SUCCESS);
 }
 
-void emit_help(void)
-{
-    fputs("Usage: tally [files|-]\n", stderr);
+void emit_help(void) {
+    fputs("Usage: tally [-t] [files|-]\n", stderr);
     exit(EX_USAGE);
 }
 
-void read_lines(const char *file)
-{
+void read_lines(const char *file) {
     FILE *fh;
-    char *line = NULL;
+    char *line        = NULL;
     size_t linebuflen = 0;
     ssize_t linelen;
     if (file) {
@@ -59,6 +58,5 @@ void read_lines(const char *file)
     }
     while ((linelen = getline(&line, &linebuflen, fh)) > 0)
         rbbst_add(line, linelen);
-    if (file)
-        fclose(fh);
+    if (file) fclose(fh);
 }

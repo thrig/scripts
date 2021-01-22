@@ -23,6 +23,15 @@ foo
 foo
 EOF
 
+$cmd->run(
+    args   => '-t',
+    stderr => qr/^tally: unique 2 of total 3/,
+    stdin  => <<'EOF', stdout => [ "2 foo", "1 bar" ]);
+bar
+foo
+foo
+EOF
+
 my $input = '';
 my %tally;
 for (1 .. 100) {
@@ -38,4 +47,4 @@ my $o = $cmd->run(stdin => $input, stdout => qr/^/,);
 eq_or_diff([ sort split $/, $o->stdout ],
     [ sort map { "$tally{$_} $_" } keys %tally ]);
 
-done_testing(19);
+done_testing 22

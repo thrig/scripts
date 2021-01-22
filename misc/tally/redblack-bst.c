@@ -10,30 +10,31 @@ bool rbbst_is_red(rbbst_node n);
 rbbst_node rbbst_newnode(rbbst_key line, ssize_t linelen);
 rbbst_node rbbst_rotate_left(rbbst_node n);
 rbbst_node rbbst_rotate_right(rbbst_node n);
-void rbbst_walk(rbbst_node n, tally * t);
+void rbbst_walk(rbbst_node n, tally *t);
 
 rbbst_node tree = NULL;
-size_t tree_count = 0;
+size_t line_count, tree_count;
 
 /***********************************************************************
  *
  * Public Functions */
 
-void rbbst_add(rbbst_key line, ssize_t linelen)
-{
-    tree = rbbst_insert(tree, line, linelen);
+void rbbst_add(rbbst_key line, ssize_t linelen) {
+    tree        = rbbst_insert(tree, line, linelen);
     tree->color = RBBST_BLACK;
+    line_count++;
 }
 
-void rbbst_tally(void)
-{
+void rbbst_tally(int showtotal) {
     tally tly, tmp;
-    if (!tree)
-        exit(EXIT_SUCCESS);
+    if (!tree) exit(EXIT_SUCCESS);
     if ((tly = calloc(tree_count, sizeof(struct tally_t))) == NULL)
         err(EX_OSERR, "could not calloc tally list");
     tmp = tly;
     rbbst_walk(tree, &tmp);
+    if (showtotal)
+        fprintf(stderr, "tally: unique %lu of total %lu\n", tree_count,
+                line_count);
     qsort(tly, tree_count, sizeof(struct tally_t), compare_tally);
     for (size_t i = 0; i < tree_count; i++) {
         printf("%lu %s", tly->count, tly->line);
@@ -45,8 +46,7 @@ void rbbst_tally(void)
  *
  * Private Functions */
 
-int compare_tally(const void *x, const void *y)
-{
+int compare_tally(const void *x, const void *y) {
     tally a, b;
     a = (tally) x;
     b = (tally) y;
@@ -58,18 +58,15 @@ int compare_tally(const void *x, const void *y)
     return 0;
 }
 
-inline void rbbst_flip_colors(rbbst_node n)
-{
-    n->color = !n->color;
-    n->left->color = !n->left->color;
+inline void rbbst_flip_colors(rbbst_node n) {
+    n->color        = !n->color;
+    n->left->color  = !n->left->color;
     n->right->color = !n->right->color;
 }
 
-rbbst_node rbbst_insert(rbbst_node n, rbbst_key line, ssize_t linelen)
-{
+rbbst_node rbbst_insert(rbbst_node n, rbbst_key line, ssize_t linelen) {
     int cmp;
-    if (n == NULL)
-        return rbbst_newnode(line, linelen);
+    if (n == NULL) return rbbst_newnode(line, linelen);
     cmp = strncmp(line, n->line, linelen);
     if (cmp < 0) {
         n->left = rbbst_insert(n->left, line, linelen);
@@ -83,20 +80,16 @@ rbbst_node rbbst_insert(rbbst_node n, rbbst_key line, ssize_t linelen)
         n = rbbst_rotate_left(n);
     if (rbbst_is_red(n->left) && rbbst_is_red(n->left->left))
         n = rbbst_rotate_right(n);
-    if (rbbst_is_red(n->left) && rbbst_is_red(n->right))
-        rbbst_flip_colors(n);
+    if (rbbst_is_red(n->left) && rbbst_is_red(n->right)) rbbst_flip_colors(n);
     return n;
 }
 
-inline bool rbbst_is_red(rbbst_node n)
-{
-    if (n == NULL)
-        return false;
+inline bool rbbst_is_red(rbbst_node n) {
+    if (n == NULL) return false;
     return n->color == RBBST_RED;
 }
 
-rbbst_node rbbst_newnode(rbbst_key line, ssize_t linelen)
-{
+rbbst_node rbbst_newnode(rbbst_key line, ssize_t linelen) {
     rbbst_node n;
     if ((n = calloc((size_t) 1, sizeof(struct rbbst_node_t))) == NULL)
         err(EX_OSERR, "could not calloc node");
@@ -108,33 +101,28 @@ rbbst_node rbbst_newnode(rbbst_key line, ssize_t linelen)
     return n;
 }
 
-inline rbbst_node rbbst_rotate_left(rbbst_node n)
-{
-    rbbst_node x = n->right;
-    n->right = x->left;
-    x->left = n;
-    x->color = x->left->color;
+inline rbbst_node rbbst_rotate_left(rbbst_node n) {
+    rbbst_node x   = n->right;
+    n->right       = x->left;
+    x->left        = n;
+    x->color       = x->left->color;
     x->left->color = RBBST_RED;
     return x;
 }
 
-inline rbbst_node rbbst_rotate_right(rbbst_node n)
-{
-    rbbst_node x = n->left;
-    n->left = x->right;
-    x->right = n;
-    x->color = x->right->color;
+inline rbbst_node rbbst_rotate_right(rbbst_node n) {
+    rbbst_node x    = n->left;
+    n->left         = x->right;
+    x->right        = n;
+    x->color        = x->right->color;
     x->right->color = RBBST_RED;
     return x;
 }
 
-void rbbst_walk(rbbst_node n, tally * t)
-{
-    if (n->left)
-        rbbst_walk(n->left, t);
+void rbbst_walk(rbbst_node n, tally *t) {
+    if (n->left) rbbst_walk(n->left, t);
     (*t)->count = n->count;
-    (*t)->line = n->line;
+    (*t)->line  = n->line;
     (*t)++;
-    if (n->right)
-        rbbst_walk(n->right, t);
+    if (n->right) rbbst_walk(n->right, t);
 }

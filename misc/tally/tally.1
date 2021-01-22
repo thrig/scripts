@@ -1,4 +1,4 @@
-.Dd June 11 2018
+.Dd January 21 2021
 .Dt TALLY 1
 .nh
 .Os
@@ -8,6 +8,7 @@
 .Sh SYNOPSIS
 .Bk -words
 .Nm
+.Op Fl t
 .Op Ar
 .Ek
 .Sh DESCRIPTION
@@ -16,6 +17,11 @@ prints the most frequent lines appearing in the input first, along with
 a tally of how many times each unique line was seen. Input may either be
 from standard input, or from one or more files passed to
 .Nm .
+Options:
+.Bl -tag -width Ds
+.It Fl t
+Emits the total unique line count and total line count to stderr.
+.El
 .Sh EXIT STATUS
 .Ex -std
 .Sh EXAMPLES
