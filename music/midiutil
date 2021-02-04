@@ -2,9 +2,10 @@
 #
 # MIDI utility routines for the Perl MIDI suite.
 
-use 5.14.0;
+use 5.24.0;
 use warnings;
 
+use Data::Dumper;
 use Getopt::Long qw(GetOptionsFromArray);
 use MIDI                ();
 use Music::LilyPondUtil ();
@@ -35,6 +36,7 @@ my %actions = (
     nixcc            => \&handle_nixcc,
     patch2instrument => \&handle_patch2instrument,
     rechannel        => \&handle_rechannel,
+    stats            => \&handle_stats,
     transpose        => \&handle_transpose,
 );
 
@@ -210,7 +212,6 @@ sub handle_fuzz {
                     $right = $k;
                 }
                 if ( $left == $right ) {
-                    use Data::Dumper;
                     warn Dumper $volumes[$i];
                     warn "zero-width volume jump\n";
                 }
@@ -491,6 +492,22 @@ sub handle_rechannel {
         }
     }
     $opus->write_to_file($outfile);
+}
+
+sub handle_stats {
+    my $filename = shift // die "Usage: midiutil stats midi-file\n";
+    my $opus     = MIDI::Opus->new( { 'from_file' => $filename, } );
+    $Data::Dumper::Sortkeys = 1;
+    my $i = 0;
+    for my $track ($opus->tracks) {
+        my %tmeta;
+        for my $e ($track->events_r->@*) {
+            $tmeta{$e->[0]}++;
+            $tmeta{_events}++;
+            $tmeta{_dur} += $e->[1];
+        }
+        print Data::Dumper->Dump([\%tmeta],['track' . $i++]);
+    }
 }
 
 sub handle_transpose {
