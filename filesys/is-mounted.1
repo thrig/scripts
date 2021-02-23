@@ -1,0 +1,56 @@
+.Dd February 22 2021
+.Dt IS-MOUNTED 1
+.nh
+.Os
+.Sh NAME
+.Nm is-mounted
+.Nd lists or checks on mount points
+.Sh SYNOPSIS
+.Bk -words
+.Nm
+.Op Fl 0Nmq
+.Op Ar mount-point
+.Ek
+.Sh DESCRIPTION
+.Nm
+without an argument lists all available mount points. With the
+.Ar mount-point
+argument the mount point name is printed and the exit status word set to
+success only if that directory is mounted.
+Options:
+.Bl -tag -width -indent
+.It Fl 0
+The
+.Dv NUL
+character will be used to delimit mount point names instead of the
+default newline.
+.It Fl N
+Sets the
+.Dv MNT_NOWAIT
+flag. This may be necessary (at the risk of using outdated information)
+should there be file systems that can block forever, such as NFS.
+.It Fl m
+Makes the 
+.Ar mount-point
+argument mandatory. Use in scripts that set
+.Ar mount-point
+from a variable that may be empty and where the default listing of mount
+points is undesirable.
+.It Fl q
+Suppresses the printing of the mount point name when a custom
+.Ar mount-point
+is supplied; otherwise, it does nothing.
+.El
+.Sh EXAMPLES
+If necessary mount a USB drive on OpenBSD.
+.Pp
+.Dl is-mounted -q /mnt || doas mount_msdos -u \&"`id -u`\&" /dev/sd1i /mnt
+.Sh EXIT STATUS
+.Ex -std
+.Sh SEE ALSO
+.Xr df 1 ,
+.Xr getfsstat 2 ,
+.Xr getmntinfo 3 ,
+.Xr thisdir 1
+.Sh AUTHOR
+.An Jeremy Mates

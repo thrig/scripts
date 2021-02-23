@@ -15,6 +15,7 @@ fillerup: fillerup.c
 findin: findin.c
 findup: findup.c
 getpof: getpof.c
+is-mounted: is-mounted.c
 llcount: llcount.c
 log-update: log-update.c
 
@@ -42,7 +43,7 @@ uvi: uvi.c
 clean:
 	git clean --force -x
 
-test: fbd fdsplit findin findup getpof llcount pamei seek thisdir twiddle uvi
+test: fbd fdsplit findin findup getpof is-mounted llcount pamei seek thisdir twiddle uvi
 	@prove --nocolor
 
 .PHONY: clean test
