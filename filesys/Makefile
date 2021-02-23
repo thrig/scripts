@@ -1,5 +1,9 @@
 CFLAGS=-std=c99 -O2 -Wall -pedantic -fno-diagnostics-color -fstack-protector-strong -fPIC -fPIE -pie -pipe
 
+.SUFFIXES: .m4 .c
+.m4.c:
+	m4 ${.IMPSRC} > ${.TARGET}
+
 corrupt: corrupt.c
 	$(CC) $(CFLAGS) `pkg-config --cflags --libs goptfoo` corrupt.c -o corrupt
 
@@ -25,6 +29,9 @@ seek: seek.c
 
 stripeofeol: stripeofeol.c
 
+thisdir: thisdir.c
+thisdir.c: thisdir.m4
+
 twiddle: twiddle.c
 	$(CC) $(CFLAGS) `pkg-config --cflags --libs goptfoo` twiddle.c -o twiddle
 
@@ -35,7 +42,7 @@ uvi: uvi.c
 clean:
 	git clean --force -x
 
-test: fbd fdsplit findin findup getpof llcount pamei seek twiddle uvi
+test: fbd fdsplit findin findup getpof llcount pamei seek thisdir twiddle uvi
 	@prove --nocolor
 
 .PHONY: clean test

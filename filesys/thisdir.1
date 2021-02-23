@@ -1,0 +1,74 @@
+.Dd February 22 2021
+.Dt THISDIR 1
+.nh
+.Os
+.Sh NAME
+.Nm thisdir
+.Nd CWD command wrapper
+.Sh SYNOPSIS
+.Bk -words
+.Nm
+.Ar mode
+.Op Ar ..
+.Ek
+.Sh DESCRIPTION
+.Nm
+treats the current working directory as the "subject" and passes it as
+the first argument to the
+.Ar mode
+command, along with any additional arguments supplied. Mode-specific
+arguments may need to be protected with
+.Sq --
+per
+.Xr getopt 3 .
+.Sh ENVIRONMENT
+.Dv THISDIR
+is a path to the directory containing programs ("modes") this utility
+will replace itself with. A default directory is set at compile time;
+.Dv THISDIR
+is always passed to the
+.Ar mode
+command.
+.Sh EXIT STATUS
+.Ex -std
+.Pp
+However,
+.Nm
+replaces itself with some other command if all goes well.
+.Sh EXAMPLES
+A "backup" mode for Mac OS X might look something along the lines of
+.Pp
+.Dl #!/bin/sh
+.Dl diskutil list /Volumes/usb-drive >/dev/null || exit 1
+.Dl CURDIR=$1
+.Dl GITDIR=`findup -H .git`
+.Dl if \&[ -n \&"$GITDIR\&" -a \&"$GITDIR\&" != \&"$CURDIR\&" ]; then
+.Dl \& \& \& cd \&"$GITDIR\&" || exit 1
+.Dl \& \& \& CURDIR=$GITDIR
+.Dl fi
+.Dl DIRNAME=`basename \&"$CURDIR\&"`
+.Dl set -e
+.Dl cd ..
+.Dl tar ...
+.Pp
+Other modes might use
+.Xr rsync 1
+to copy the current directory somewhere, etc.
+.Pp
+A ZSH completion script would at minimum be
+.Pp
+.Dl #compdef thisdir
+.Dl local tdir
+.Dl tdir=${THISDIR:-~/libexec/thisdir}
+.Dl _arguments '1:mode:_files -W $tdir' && return 0
+.Pp
+to complete on the 
+.Ar mode
+programs in the
+.Dv THISDIR
+directory.
+.Sh SEE ALSO
+.Xr findup 1 ,
+.Xr getopt 3
+.Sh AUTHOR
+.An Jeremy Mates

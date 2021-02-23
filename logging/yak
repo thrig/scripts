@@ -3,9 +3,9 @@
 # yak - diagnostic tool that saves invocation details to a temporary
 # file. another option is to instead use tools like strace or sysdig
 myname=`basename "$0"`
+umask 077
 yakout=`mktemp "/tmp/yak.$myname.XXXXXXXXXX"` || exit 1
-chmod go-r "$yakout"
-(  printf "$0 %s\npid=$$\n" "$*"
+(  printf "$0 %s\n\npid=$$\n" "$*"
    id  ; groups ; printf "\n"
    tty ; printf "\n"
    env ; printf "\n"

@@ -19,8 +19,8 @@
 #   SSH_CONNECTION="srcip srcport dstip dstport'
 #
 # NOTE software may already support limited access via ssh e.g. git-shell(1)
+umask 077
 yakout=`mktemp /tmp/yak-ssh.XXXXXXXXXX` || exit 1
-chmod go-r "$yakout"
 (  printf "$SSH_ORIGINAL_COMMAND\n\n"
    if [ -t 0 ]; then
       tty
