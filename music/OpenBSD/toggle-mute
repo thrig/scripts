@@ -1,2 +1,2 @@
 #!/bin/sh
-exec mixerctl -t outputs.master.mute
+exec sndioctl output.mute=!

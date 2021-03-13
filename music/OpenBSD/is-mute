@@ -6,7 +6,7 @@ while getopts q OPT; do
       q) QUIET=1 ;;
    esac
 done
-if [ "`mixerctl outputs.master.mute`" == outputs.master.mute=on ]; then
+if [ x"`sndioctl output.mute`" == xoutput.mute=1 ]; then
    [ "$QUIET" -eq 0 ] && echo mute
    exit 0
 fi
