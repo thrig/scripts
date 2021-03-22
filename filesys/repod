@@ -118,12 +118,12 @@ switch -exact $target {
         exec {*}$ssh_cmd $hostname "$git_init_cmd --bare $directory"
     }
     put {
-        process_args
+        process_args $target
         exec {*}$ssh_cmd $hostname "$git_init_cmd $directory"
         exec {*}$ssh_cmd $hostname "git --git-dir=$directory/.git config receive.denyCurrentBranch ignore"
     }
     remote {
-        process_args
+        process_args $target
     }
     default {
         warn "unknown target '$target'"
