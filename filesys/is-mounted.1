@@ -1,4 +1,4 @@
-.Dd February 22 2021
+.Dd March 23 2021
 .Dt IS-MOUNTED 1
 .nh
 .Os
@@ -41,12 +41,12 @@ Suppresses the printing of the mount point name when a custom
 .Ar mount-point
 is supplied; otherwise, it does nothing.
 .El
+.Sh EXIT STATUS
+.Ex -std
 .Sh EXAMPLES
 If necessary mount a USB drive on OpenBSD.
 .Pp
 .Dl is-mounted -q /mnt || doas mount_msdos -u \&"`id -u`\&" /dev/sd1i /mnt
-.Sh EXIT STATUS
-.Ex -std
 .Sh SEE ALSO
 .Xr df 1 ,
 .Xr getfsstat 2 ,

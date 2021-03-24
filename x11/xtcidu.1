@@ -1,0 +1,44 @@
+.Dd March 23 2021
+.Dt XTCIDU 1
+.nh
+.Os
+.Sh NAME
+.Nm xtcidu
+.Nd reads a short ASCII label via an X Window
+.Sh SYNOPSIS
+.Bk -words
+.Nm
+.Op Fl B Ar bad-chars
+.Op Fl n
+.Ek
+.Sh DESCRIPTION
+.Nm
+reads a short ASCII label from an X Window and emits said label to
+standard output.
+Options:
+.Bl -tag -width -indent
+.It Fl B Ar bad-chars
+Do not allow the listed characters to be included in the label.
+.It Fl n
+Omit the trailing newline.
+.El
+.Sh EXIT STATUS
+.Ex -std
+.Sh EXAMPLES
+A typical use might be to obtain a filename or fragment thereof in
+which case the
+.Qq /
+or
+.Qq \ 
+characters (among others) may be undesirable:
+.Pp
+.Dl #!/bin/sh
+.Dl label=`xtcidu -B \&"/ \&" -n`
+.Dl ...
+.Pp
+Only printable characters are allowed by default. (A better state for
+security would be to list only what characters should be accepted.)
+.Sh SEE ALSO
+.Xr isprint 3
+.Sh AUTHOR
+.An Jeremy Mates

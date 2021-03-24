@@ -5,8 +5,8 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
-#include <err.h>
 #include <ctype.h>
+#include <err.h>
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,7 +17,7 @@
 enum { HKEY_DONE, HKEY_MORE };
 
 #ifndef OUTPUT_BUFFER_LEN
-#define OUTPUT_BUFFER_LEN 64
+#define OUTPUT_BUFFER_LEN 63
 #endif
 
 #define TEXT_X 5
@@ -35,7 +35,8 @@ int X_Snum;      // DefaultScreen
 Window X_Win;    // main window
 GC X_Gc;
 
-char Output[OUTPUT_BUFFER_LEN];
+unsigned long Current;
+char Output[OUTPUT_BUFFER_LEN + 1];
 
 char *Flag_Badchars; // -B
 int Flag_Nonewline;  // -n
@@ -84,8 +85,8 @@ DONE:
     if (pledge("stdio", NULL) == -1) err(1, "pledge failed");
 #endif
     if (Output[0] != '\0') {
-        fputs(Output, stdout);
-        if (!Flag_Nonewline) putchar('\n');
+        if (!Flag_Nonewline) Output[Current++] = '\n';
+        write(STDOUT_FILENO, Output, Current);
     } else {
         // did not get a string?? report this to caller
         status = 1;
@@ -101,25 +102,23 @@ void emit_help(void) {
 inline int handle_key(XEvent *xevp) {
     char bytes[3], *bcp;
     int count, isbad;
-
-    static unsigned long current = 0;
-    unsigned long oldcur         = current;
+    unsigned long oldcur = Current;
 
     count = XLookupString(&xevp->xkey, bytes, sizeof(bytes), NULL, NULL);
-    switch (count) {
-    case 0: // control character
-        break;
-    case 1: // printable character -- ascii(7)
+    if (count == 1) { // printable character -- ascii(7)
         switch (bytes[0]) {
         case 8: // backspace
-            if (current == 0) {
+            if (Current == 0) {
                 DINGBELL;
                 break;
             }
-            Output[--current] = '\0';
+            Output[--Current] = '\0';
             break;
         case 13: // enter -- accepts the label, if there is one
-            if (current == 0) break;
+            if (Current == 0) {
+                DINGBELL;
+                break;
+            }
             return HKEY_DONE;
         default:
             if (!isprint(bytes[0])) break;
@@ -139,18 +138,17 @@ inline int handle_key(XEvent *xevp) {
                 }
                 if (isbad) break;
             }
-            if (current >= OUTPUT_BUFFER_LEN) {
+            if (Current >= OUTPUT_BUFFER_LEN) {
                 DINGBELL;
                 break;
             }
-            Output[current++] = bytes[0];
+            Output[Current++] = bytes[0];
         }
-        break;
     }
 
-    if (current != oldcur) {
+    if (Current != oldcur) {
         XClearWindow(X_Disp, X_Win);
-        XDrawString(X_Disp, X_Win, X_Gc, TEXT_X, TEXT_Y, Output, current);
+        XDrawString(X_Disp, X_Win, X_Gc, TEXT_X, TEXT_Y, Output, Current);
     }
 
     return HKEY_MORE;
