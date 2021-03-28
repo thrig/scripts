@@ -75,6 +75,11 @@ sub do_shortcut {
     } else {
         my $key = shift @ARGV;
 
+        # CommonLISP/HyperSpec: "sort" -> S -> FrontMatter/Master-Index-%1.html
+        if ($key eq 'cli') {
+            $ARGV[0] = uc substr $ARGV[0], 0, 1;
+        }
+
         # shortcuts that take parameters have a trailing @ on them, but
         # user must not type that
         $key .= '@';

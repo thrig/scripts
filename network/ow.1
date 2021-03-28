@@ -1,4 +1,4 @@
-.Dd December  4 2018
+.Dd March 28 2021
 .Dt OW 1
 .nh
 .Os
@@ -37,6 +37,11 @@ was specified.
 Change the working to the given
 .Ar dir
 or with only the flag instead the home directory of the current user.
+This may help place subsequent downloads with, say,
+.Xr ftp 1
+into that directory and not the random directory that
+.Nm
+was launched from.
 .It Cm --directory Op Fl d
 Enables
 .Nm
@@ -77,12 +82,14 @@ to do anything at all.
 .It Pa ~/.ow/browsers
 A list of names to browser command mappings, for example
 .Pp
+.Dl bloaty  firefox 
 .Dl copycat sgrax copycat
-.Dl iridium solitary $HOME/tmp iridium
+.Dl feh     feh
+.Dl ftp     ftp
 .Dl lwp     lwp-request -f -t 7 -u -s -E -d
 .Dl open    open -g
 .Dl pbcopy  sgrax pbcopy
-.Dl safari  open -g -a Safari
+.Dl w3m     w3m
 .Pp
 These are used by
 .Fl o
@@ -108,11 +115,11 @@ URL remapping file that contains regular expressions followed by a
 browser to use should a regular expression match the generated URL.
 First match wins.
 .Pp
-.Dl # handle dict:// URL with open(1)
+.Dl # handle dict:// URL with open(1) (Mac OS X)
 .Dl ^dict:// open
 .Pp
-.Dl # send #perl cat pictures to the bloaty browser
-.Dl imgur\e.com safari
+.Dl # use ftp(1) to download images (or could pass them to feh)
+.Dl (?i)\e.(?:gif|jpg|png)$ ftp
 .It Pa ~/.ow/shortcuts
 Shortcut to URL mapping. Shortcuts that take arguments must be
 followed by a
@@ -124,7 +131,7 @@ and the numbered
 will be filled in from the arguments given on the command line. Some
 examples may help.
 .Pp
-.Dl # Apple Dictionary.app
+.Dl # Mac OS X Dictionary.app
 .Dl d@ dict://%1
 .Pp
 .Dl # man -k
@@ -133,7 +140,7 @@ examples may help.
 .Dl mansect@ http://man.openbsd.org/man%1/%2.%1
 .Pp
 .Dl # no argument, visit URL directly
-.Dl metacpan    http://search.metacpan.org/
+.Dl metacpan    https://search.metacpan.org/
 .Dl # with %@ arguments will be + joined and passed along
 .Dl metacpan@   https://metacpan.org/search?q=%@
 .Pp
@@ -157,7 +164,6 @@ examples may help.
 .Sh SEE ALSO
 .Xr copycat 1 ,
 .Xr lwp-request 1 ,
-.Xr open 1 ,
 .Xr pbcopy 1 ,
 .Xr sgrax 1 ,
 .Xr w3m 1
