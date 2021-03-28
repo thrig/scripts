@@ -1,4 +1,4 @@
-.Dd March 23 2021
+.Dd March 27 2021
 .Dt XTCIDU 1
 .nh
 .Os
@@ -9,6 +9,9 @@
 .Bk -words
 .Nm
 .Op Fl B Ar bad-chars
+.Op Fl F Ar font-name
+.Op Fl b Ar bg-color
+.Op Fl f Ar fg-color
 .Op Fl n
 .Ek
 .Sh DESCRIPTION
@@ -19,6 +22,19 @@ Options:
 .Bl -tag -width -indent
 .It Fl B Ar bad-chars
 Do not allow the listed characters to be included in the label.
+.It Fl F Ar font-name
+Use the given
+.Ar font-name .
+.Xr xlsfonts 1
+will list valid font names.
+.It Fl b Ar bg-color
+Use the given color for the background.
+.Pa X11/rgb.txt
+lists valid color names, or use whatever
+.Xr XAllocNamedColor 3
+supports.
+.It Fl f Ar fg-color
+Use the given color for the foreground text.
 .It Fl n
 Omit the trailing newline.
 .El
@@ -39,6 +55,8 @@ characters (among others) may be undesirable:
 Only printable characters are allowed by default. (A better state for
 security would be to list only what characters should be accepted.)
 .Sh SEE ALSO
-.Xr isprint 3
+.Xr XAllocNamedColor 3 ,
+.Xr isprint 3 ,
+.Xr xlsfonts 1
 .Sh AUTHOR
 .An Jeremy Mates
