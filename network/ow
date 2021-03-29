@@ -5,6 +5,7 @@
 use 5.16.0;
 use warnings;
 use Cwd ();
+use DB_File ();
 use File::Basename qw(basename);
 use File::HomeDir ();
 use File::Spec::Functions qw(catfile rel2abs);
@@ -14,6 +15,7 @@ use URI ();
 
 my $do_something = basename($0) eq 'wv' ? \&do_directory : \&do_shortcut;
 
+Getopt::Long::Configure("bundling");
 GetOptions(
     'always-remap|A' => \my $Flag_AlwaysRemap,
     'chdir|C:s'      => \my $Flag_Chdir,
@@ -23,27 +25,25 @@ GetOptions(
     'open|o=s'       => \my $Flag_Method,
 ) or exit 65;
 
-my $Open_With = loadconfig( path_to('browsers') );
-my $Re_Map    = loadremap( path_to('remap') );
+my $Home = File::HomeDir->my_home;
 
 exit $do_something->();
 
 sub do_directory {
-    my $dirmap = loadconfig( path_to('dirmap') );
+    my $dirmap = loadmap( path_to('dirmap') );
+    my $dir    = Cwd::getcwd;
 
-    my $dir = Cwd::getcwd;
-
-    for my $mapent ( sort { length $b <=> length $a } keys %$dirmap ) {
-        my $pos = index $dir, $mapent;
+    for my $ent ( sort { length $b->[0] <=> length $a->[0] } @$dirmap ) {
+        my $pos = index $dir, $ent->[0];
         if ( $pos > -1 ) {
-            my $frag = substr( $dir, $pos + length $mapent ) || q{};
+            my $frag = substr( $dir, $pos + length $ent->[0] ) || q{};
 
             # prevent // issues
-            $frag =~ s{^/+}{} if $dirmap->{$mapent} =~ m{/%[@\d]}a;
+            $frag =~ s{^/+}{} if $ent->[1] =~ m{/%[@\d]}a;
 
-            $dirmap->{$mapent} =~ s{%(\@|\d+)/}{%$1}g if $frag eq q{};
+            $ent->[1] =~ s{%(\@|\d+)/}{%$1}g if $frag eq q{};
 
-            visit( fill_in( $dirmap->{$mapent}, $frag ) );
+            visit( fill_in( $ent->[1], $frag ) );
         }
     }
     visit( 'file://' . $dir );
@@ -51,24 +51,33 @@ sub do_directory {
 
 sub do_shortcut {
     emit_help() unless @ARGV;
-    my $shortcut = loadconfig( path_to('shortcuts') );
+
+    my $file = path_to('shortcuts') . '.db';
+    my %shortcuts;
+    tie %shortcuts, 'DB_File', $file or die "cannot tie '$file': $!\n";
 
     if ( @ARGV == 1 ) {
-        if ( exists $shortcut->{ $ARGV[0] } ) {
-            visit( $shortcut->{ $ARGV[0] } );
-        } elsif ( $ARGV[0] =~ m{^\w+://.} ) {
-            # NOTE above regex won't match foo+bar:// style URL, but I
-            # don't much use those, and not with this script
+        # assume DB created with makemap(8) or equivalent; see
+        #   perldoc DB_File | less -p "the NULL termination problem"
+        # for details
+        my $key = $ARGV[0] . "\0";
+        if ( exists $shortcuts{$key} ) {
+            visit( $shortcuts{$key} =~ tr/\0//dr );
+        } elsif ( $ARGV[0] =~ m{^\w+(?:\+\w+)?://.} ) {
+            # maybe a URL?
             visit( $ARGV[0] );
         } elsif ( $ARGV[0] =~ m{[./]} ) {
             # possibly a "foo/bar" path or "example.org" hostname?
             if ( -e $ARGV[0] ) {
                 visit( 'file://' . rel2abs( $ARGV[0] ) );
             } else {
-                visit( 'http://' . $ARGV[0] );
+                visit( 'https://' . $ARGV[0] );
             }
-        } elsif ( exists $shortcut->{'*'} ) {
-            visit( fill_in( $shortcut->{'*'}, $ARGV[0] ) );
+        } elsif ( exists $shortcuts{"*\0"} ) {
+            # wildcard shortcut; probably hard to reach given the
+            # previous checks but exists to match the OmniWeb interface
+            # this script was originally modelled on
+            visit( fill_in( $shortcuts{"*\0"}, $ARGV[0] ) );
         } else {
             die "ow: not sure what to do with '$ARGV[0]'\n";
         }
@@ -76,17 +85,21 @@ sub do_shortcut {
         my $key = shift @ARGV;
 
         # CommonLISP/HyperSpec: "sort" -> S -> FrontMatter/Master-Index-%1.html
-        if ($key eq 'cli') {
+        # or at least let me be lazy about not upcasing the section name
+        # (this probably should be a filter or associated with the 'cli'
+        # definition in the config file, somehow)
+        if ( $key eq 'cli' ) {
             $ARGV[0] = uc substr $ARGV[0], 0, 1;
         }
 
         # shortcuts that take parameters have a trailing @ on them, but
         # user must not type that
-        $key .= '@';
+        $key .= "@\0";
 
-        if ( exists $shortcut->{$key} ) {
-            visit( fill_in( $shortcut->{$key}, @ARGV ) );
+        if ( exists $shortcuts{$key} ) {
+            visit( fill_in( $shortcuts{$key} =~ tr/\0//dr, @ARGV ) );
         } else {
+            $key =~ tr/\0//d;
             die "ow: no such shortcut '$key'\n";
         }
     }
@@ -100,8 +113,8 @@ Shortcuts or file to URL or browser mapping.
 
   -A     Always perform remapping (even if -o used)
   -d     Perform directory mapping instead of shortcut lookup ("wv")
-  -l     Print URL instead of calling web client
-  -o oo  Use specified open method instead of the default
+  -l     Print URL instead of calling the command
+  -o oo  Pass URL to the given command
 
 END_USAGE
     exit 64;
@@ -117,31 +130,19 @@ sub fill_in {
     return $url;
 }
 
-sub loadconfig {
+sub loadmap {
     my ($file) = @_;
     open my $fh, '<', $file or die "ow: could not open '$file': $!\n";
-    my $hashref;
+    my $pairs;
     while ( readline $fh ) {
         next if /^(?:#|$)/;
         my @pair = $_ =~ m/^(\S+)\s+(\S.+?)\s*$/;
-        $hashref->{ $pair[0] } = $pair[1] if @pair == 2;
+        push @$pairs, \@pair if @pair == 2;
     }
-    return $hashref;
+    return $pairs;
 }
 
-sub loadremap {
-    my ($file) = @_;
-    open my $fh, '<', $file or die "ow: could not open '$file': $!\n";
-    my $relist;
-    while ( readline $fh ) {
-        next if /^(?:#|$)/;
-        my @pair = $_ =~ m/^(\S+)\s+(\S.+?)\s*$/;
-        push @$relist, \@pair if @pair == 2;
-    }
-    return $relist;
-}
-
-sub path_to { catfile( File::HomeDir->my_home, '.ow', $_[0] ) }
+sub path_to { catfile( $Home, '.ow', $_[0] ) }
 
 sub visit {
     my ($url) = @_;
@@ -154,7 +155,8 @@ sub visit {
     my @command;
 
     if ( $Flag_AlwaysRemap xor !$Flag_Method ) {
-        for my $map (@$Re_Map) {
+        my $remap = loadmap( path_to('remap') );
+        for my $map (@$remap) {
             if ( $url =~ m{$map->[0]} ) {
                 @command = shellwords( $map->[1] );
                 last;
@@ -170,8 +172,13 @@ sub visit {
         );
     }
 
-    if ( @command == 1 and exists $Open_With->{ $command[0] } ) {
-        @command = shellwords( $Open_With->{ $command[0] } );
+    my %cmap;
+    my $file = path_to('browsers') . '.db';
+    tie %cmap, 'DB_File', $file or die "cannot tie '$file': $!\n";
+
+    my $key = $command[0] . "\0";
+    if ( @command == 1 and exists $cmap{$key} ) {
+        @command = shellwords( $cmap{$key} =~ tr/\0//dr );
     }
 
     if ( defined $Flag_Chdir ) {

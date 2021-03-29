@@ -10,7 +10,7 @@
 .Nm
 .Op Fl Adl
 .Op Fl C Ar dir
-.Op Fl o Ar method
+.Op Fl o Ar command
 .Ar file-or-url-or-abbr
 .Op Ar abbr args ..
 .Ek
@@ -19,13 +19,12 @@
 .Bk -words
 .Op Fl Al
 .Op Fl C Ar dir
-.Op Fl o Ar method
+.Op Fl o Ar command
 .Ek
 .Sh DESCRIPTION
 .Nm
 maps shortcuts or files or URLs or the current working directory to
-a fully qualified URL and passes that URL off to what may be a
-web browser.
+a fully qualified URL and passes that URL off to some command.
 Options:
 .Pp
 .Bl -tag -width Ds
@@ -37,9 +36,9 @@ was specified.
 Change the working to the given
 .Ar dir
 or with only the flag instead the home directory of the current user.
-This may help place subsequent downloads with, say,
+This may help place downloads with, say,
 .Xr ftp 1
-into that directory and not the random directory that
+into that directory and not whatever directory that
 .Nm
 was launched from.
 .It Cm --directory Op Fl d
@@ -51,22 +50,23 @@ mode, that is, to map the current working directory to a URL and to pass
 that URL to a browser.
 .It Cm --list Op Fl l
 List the URL to standard out and exit instead of calling a browser,
-commonly then for copying and pasting. Another way to do this (with
+commonly then for copying and pasting. Alternate ways to do this (with
 .Xr copycat 1
 and
 .Xr sgrax 1
-installed) is
+installed) include
 .Pp
 .Dl $ Ic ow -l ... \&| pbcopy
+.Dl $ Ic ow -o echo ... \&| pbcopy
 .Dl $ Ic ow -o copycat ...
-.It Cm --open= Ns Ar method Op Fl o Ar method
-Use the browser specified by the given
-.Ar method
-to visit the URL. The method may be set within the
-.Pa ~/.ow/browsers
-file or can be a full command to execute. The generated URL will be
-given as the last argument to the
-.Ar method .
+.It Cm --open= Ns Ar command Op Fl o Ar command
+Call the program specified by the given
+.Ar command .
+This may be set within the
+.Pa ~/.ow/browsers.db
+file or will instead be a command to exec. The URL will be given as the
+last argument to the
+.Ar command .
 .Pp
 If
 .Fl o
@@ -79,28 +79,29 @@ These file must be setup for
 .Nm
 to do anything at all.
 .Bl -tag -width Ds
-.It Pa ~/.ow/browsers
-A list of names to browser command mappings, for example
+.It Pa ~/.ow/browsers.db
+This file must be hashed with
+.Xr makemap 8
+or equivalent. It should contain an optional list of names to browser
+command mappings, e.g.
 .Pp
 .Dl bloaty  firefox 
 .Dl copycat sgrax copycat
-.Dl feh     feh
-.Dl ftp     ftp
 .Dl lwp     lwp-request -f -t 7 -u -s -E -d
 .Dl open    open -g
 .Dl pbcopy  sgrax pbcopy
-.Dl w3m     w3m
 .Pp
 These are used by
 .Fl o
-to pick a browser or can also appear in the
-.Pa ~/.ow/remap
-file.
+to run a browser by an alias for the real command, or where the command
+arguments are customized.
+.Nm
+will try to exec whatever is given if there is no matching entry.
 .It Pa ~/.ow/dirmap
 A list of directory path fragments to URLs used by the
 .Nm wv
-mode. Matching is done by the longest matching directory first (first
-match wins) and a file:// URL will be generated if no match is found. A
+mode. Matching is done by the longest matching directory; the first
+match wins. A file:// URL will be generated if no match is found. A
 .Ar %1
 in the URL will be filled in with the directory fragment. Example:
 .Pp
@@ -118,10 +119,12 @@ First match wins.
 .Dl # handle dict:// URL with open(1) (Mac OS X)
 .Dl ^dict:// open
 .Pp
-.Dl # use ftp(1) to download images (or could pass them to feh)
+.Dl # use ftp(1) to download images
 .Dl (?i)\e.(?:gif|jpg|png)$ ftp
-.It Pa ~/.ow/shortcuts
-Shortcut to URL mapping. Shortcuts that take arguments must be
+.It Pa ~/.ow/shortcuts.db
+Shortcut to URL mapping. Build this file using
+.Xr makemap 8
+or equivalent (see below). Shortcuts that take arguments must be
 followed by a
 .Ar @ .
 For these,
@@ -155,15 +158,27 @@ examples may help.
 .Sh EXIT STATUS
 .Ex -std
 .Sh EXAMPLES
-.Dl $ Ic fgrep 'g@' ~/.ow/shortcuts
+.Dl $ Ic cd ~/.ow
+.Dl $ Ic fgrep 'g@' shortcuts
 .Dl g@ https://duckduckgo.com/html?q=%@
+.Dl $ Ic makemap shortcuts
+.Dl $ Ic file shortcuts.db
+.Dl shortcuts.db: Berkeley DB 1.85 (Hash, version 2, native byte-order)
 .Dl $ Ic ow -l g web search
 .Dl https://duckduckgo.com/html?q=web+search
 .Dl $ Ic ow -l rfc 1149
 .Dl file:///.../rfcs/rfc1149.txt
+.Pp
+If a system only has Postfix installed the
+.Xr postmap 1
+tool can build
+.Pa shortcuts.db :
+.Pp
+.Dl $ Ic cd ~/.ow && postmap hash:shortcuts
 .Sh SEE ALSO
 .Xr copycat 1 ,
 .Xr lwp-request 1 ,
+.Xr makemap 8 ,
 .Xr pbcopy 1 ,
 .Xr sgrax 1 ,
 .Xr w3m 1
