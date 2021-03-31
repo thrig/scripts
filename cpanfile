@@ -6,6 +6,7 @@ requires 'Capture::Tiny';
 requires 'Carp';
 requires 'Carp::Always';
 requires 'Expect';
+requires 'ExtUtils::Embed';
 requires 'File::AtomicWrite';
 requires 'File::Basename';
 requires 'File::Cmp';

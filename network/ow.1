@@ -1,4 +1,4 @@
-.Dd March 28 2021
+.Dd March 31 2021
 .Dt OW 1
 .nh
 .Os
@@ -11,7 +11,7 @@
 .Op Fl Adl
 .Op Fl C Ar dir
 .Op Fl o Ar command
-.Ar file-or-url-or-abbr
+.Ar host-or-url-or-abbr
 .Op Ar abbr args ..
 .Ek
 .Bk -words
@@ -20,97 +20,119 @@
 .Op Fl Al
 .Op Fl C Ar dir
 .Op Fl o Ar command
+.Op Ar file
 .Ek
 .Sh DESCRIPTION
 .Nm
-maps shortcuts or files or URLs or the current working directory to
-a fully qualified URL and passes that URL off to some command.
+maps various input forms (shortcuts, hostnames, URL) into URL, possibly
+after templating in user input.
+.Nm wv
+maps files or the current working directory into a URL. The URL is then
+displayed or passed off to some other command, with various
+complications to use a different command for certain URL. The mappings
+(and remappings) must be defined in various configuration files.
 Options:
-.Pp
 .Bl -tag -width Ds
-.It Cm --always-remap Fl A
+.It Fl A
 Always perform remapping of URL, regardless of whether
 .Fl o
 was specified.
-.It Cm --chdir Ns [= Ns Ar dir ] Fl C Op Ar dir
+.It Fl C Op Ar dir
 Change the working to the given
 .Ar dir
-or with only the flag instead the home directory of the current user.
 This may help place downloads with, say,
 .Xr ftp 1
 into that directory and not whatever directory that
 .Nm
 was launched from.
-.It Cm --directory Op Fl d
+.It Fl d
 Enables
 .Nm
-to act in
+to act as
 .Nm wv
-mode, that is, to map the current working directory to a URL and to pass
-that URL to a browser.
-.It Cm --list Op Fl l
-List the URL to standard out and exit instead of calling a browser,
-commonly then for copying and pasting. Alternate ways to do this (with
+without being named that on the filesystem.
+.It Fl l
+List the URL to standard out and exit instead of calling a command,
+presumably for copying and pasting elsewhere. Alternate ways to do
+this (with
 .Xr copycat 1
 and
 .Xr sgrax 1
-installed) include
+installed and configured) include:
 .Pp
 .Dl $ Ic ow -l ... \&| pbcopy
 .Dl $ Ic ow -o echo ... \&| pbcopy
 .Dl $ Ic ow -o copycat ...
-.It Cm --open= Ns Ar command Op Fl o Ar command
+.It Fl o Ar command
 Call the program specified by the given
 .Ar command .
-This may be set within the
-.Pa ~/.ow/browsers.db
-file or will instead be a command to exec. The URL will be given as the
-last argument to the
+The URL will be given as the last argument to the
 .Ar command .
+Various configuration files may alter the command used.
 .Pp
-If
+When
 .Fl o
-is set remapping will be disabled unless
+is used remapping will be disabled unless
 .Fl A
 is set.
 .El
+.Sh ENVIRONMENT
+.Dv OW_COMMAND
+will be used as the default command if set; otherwise, a default command
+is compiled into
+.Nm .
 .Sh FILES
 These file must be setup for
 .Nm
-to do anything at all.
+to be at least somewhat usable.
 .Bl -tag -width Ds
 .It Pa ~/.ow/browsers.db
 This file must be hashed with
 .Xr makemap 8
-or equivalent. It should contain an optional list of names to browser
-command mappings, e.g.
+or equivalent. It should contain a list of names to browser command
+mappings, e.g.
 .Pp
 .Dl bloaty  firefox 
 .Dl copycat sgrax copycat
-.Dl lwp     lwp-request -f -t 7 -u -s -E -d
+.Dl lwp     lwp-request -fusEdt 7
 .Dl open    open -g
 .Dl pbcopy  sgrax pbcopy
 .Pp
 These are used by
 .Fl o
 to run a browser by an alias for the real command, or where the command
-arguments are customized.
+arguments are customized. The URL is always given as the last argument
+to the command. The command will be split on whitespace and passed to
+.Xr execvp 3 ;
+quoted whitespace is not supported.
 .Nm
 will try to exec whatever is given if there is no matching entry.
 .It Pa ~/.ow/dirmap
-A list of directory path fragments to URLs used by the
+A list of regular expressions and destination URL pairs, for
 .Nm wv
-mode. Matching is done by the longest matching directory; the first
-match wins. A file:// URL will be generated if no match is found. A
-.Ar %1
-in the URL will be filled in with the directory fragment. Example:
+mode. The first matching expression is used. A
+.Qq file://
+URL will be
+generated if no match is found. Example:
 .Pp
-.Dl co/scripts https://github...scripts/tree/master/%1
+.Dl /co/(?<h>[^/]+)/(?<t>.+) https://.../%{h}/tree/master/%{t}
+.Dl /co/(?<h>[^/]+) https://.../%{h}/
 .Pp
-This indicates that if the current working directory contains
-.Pa co/scripts
-then the directory fragment thereunder should be appended to the
-github URL.
+This indicates that if the file given (as resolved by
+.Xr realpath 3 )
+or the current working directory matches, say,
+.Pa .../co/scripts/network/ow.1
+then a URL such as
+.Pp
+.Dl https://.../scripts/tree/master/network/ow.1
+.Pp
+will be generated.
+.Xr perlre 1
+details the syntax of the regular expression; named matches such as
+.Qq (?<foo>...)
+will be substituted for any
+.Qq %{foo}
+in the destination URL.
 .It Pa ~/.ow/remap
 URL remapping file that contains regular expressions followed by a
 browser to use should a regular expression match the generated URL.
@@ -118,9 +140,8 @@ First match wins.
 .Pp
 .Dl # handle dict:// URL with open(1) (Mac OS X)
 .Dl ^dict:// open
-.Pp
 .Dl # use ftp(1) to download images
-.Dl (?i)\e.(?:gif|jpg|png)$ ftp
+.Dl (?i)\e.(?:gif|jpe?g|png)$ ftp
 .It Pa ~/.ow/shortcuts.db
 Shortcut to URL mapping. Build this file using
 .Xr makemap 8
@@ -129,7 +150,7 @@ followed by a
 .Ar @ .
 For these,
 .Ar %@
-and the numbered
+and any numbered
 .Ar %1
 will be filled in from the arguments given on the command line. Some
 examples may help.
@@ -152,7 +173,7 @@ examples may help.
 .Dl # ftp.rfc-editor.org::rfcs-text-only rfcs
 .Dl rfc@ file:///path/to/rfcs/rfc%1.txt
 .Pp
-.Dl # same story for CommonLISP docs
+.Dl # and also for CommonLISP
 .Dl cli \& file:///.../HyperSpec/FrontMatter/Master-Index.html
 .Dl cli@ file:///.../HyperSpec/FrontMatter/Master-Index-%1.html
 .Sh EXIT STATUS
@@ -166,8 +187,6 @@ examples may help.
 .Dl shortcuts.db: Berkeley DB 1.85 (Hash, version 2, native byte-order)
 .Dl $ Ic ow -l g web search
 .Dl https://duckduckgo.com/html?q=web+search
-.Dl $ Ic ow -l rfc 1149
-.Dl file:///.../rfcs/rfc1149.txt
 .Pp
 If a system only has Postfix installed the
 .Xr postmap 1

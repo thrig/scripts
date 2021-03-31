@@ -16,6 +16,10 @@ portpester: portpester.c
 
 macutil.o: macutil.c macutil.h
 	$(CC) -c $(CFLAGS) macutil.c -o macutil.o
+
+ow: ow.c
+	`perl -MConfig -e 'print $$Config{cc}'` -O2 -Wall -fno-diagnostics-color -o ow ow.c `perl -MExtUtils::Embed -e ccopts -e ldopts`
+
 randmac: randmac.c macutil.o macutil.h
 	$(CC) $(CFLAGS) `pkg-config --cflags --libs goptfoo` macutil.o randmac.c -o randmac
 
@@ -32,7 +36,7 @@ validate-rsnapshot: validate-rsnapshot.c
 clean:
 	git clean --force -x
 
-test: ipint localaddr macnorm v4addr v6addr validate-rsnapshot
+test: ipint localaddr macnorm ow v4addr v6addr validate-rsnapshot
 	@prove --nocolor
 
 .PHONY: clean test
