@@ -8,11 +8,18 @@
 .Sh SYNOPSIS
 .Bk -words
 .Nm
-.Op Fl Adl
+.Op Fl Al
 .Op Fl C Ar dir
 .Op Fl o Ar command
-.Ar host-or-url-or-abbr
-.Op Ar abbr args ..
+.Op Fl t Ar tag
+.Ar shortcut Op Ar arg Op ..
+.Ek
+.Bk -words
+.Nm
+.Op Fl Al
+.Op Fl C Ar dir
+.Op Fl o Ar command
+.Ar hostname-or-url
 .Ek
 .Bk -words
 .Nm wv
@@ -20,21 +27,21 @@
 .Op Fl Al
 .Op Fl C Ar dir
 .Op Fl o Ar command
+.Op Fl t Ar tag
 .Op Ar file
 .Ek
 .Sh DESCRIPTION
 .Nm
-maps various input forms (shortcuts, hostnames, URL) into URL, possibly
-after templating in user input.
+maps input forms (shortcuts, hostnames, URL) into URL, possibly after
+templating in user input.
 .Nm wv
-maps files or the current working directory into a URL. The URL is then
-displayed or passed off to some other command, with various
-complications to use a different command for certain URL. The mappings
-(and remappings) must be defined in various configuration files.
+maps a file name or the current working directory into a URL. The URL is
+then displayed or passed off to some other command. Various
+configuration files control how this happens.
 Options:
 .Bl -tag -width Ds
 .It Fl A
-Always perform remapping of URL, regardless of whether
+Always perform remapping of URL, even if
 .Fl o
 was specified.
 .It Fl C Op Ar dir
@@ -50,11 +57,10 @@ Enables
 .Nm
 to act as
 .Nm wv
-without being named that on the filesystem.
+without having to be named that on the filesystem.
 .It Fl l
-List the URL to standard out and exit instead of calling a command,
-presumably for copying and pasting elsewhere. Alternate ways to do
-this (with
+Emits the URL to stdout and exits instead of calling a command, presumably
+for copying and pasting elsewhere. Alternate ways to do this (with
 .Xr copycat 1
 and
 .Xr sgrax 1
@@ -75,12 +81,22 @@ When
 is used remapping will be disabled unless
 .Fl A
 is set.
+.It Fl t Ar tag
+Specify a custom
+.Ar tag
+that may be used by subsequent operations.
 .El
 .Sh ENVIRONMENT
 .Dv OW_COMMAND
 will be used as the default command if set; otherwise, a default command
 is compiled into
 .Nm .
+The
+.Fl o
+flag or
+entries in
+.Pa ~/.ow/remap
+may alter what command is used.
 .Sh FILES
 These file must be setup for
 .Nm
@@ -89,28 +105,38 @@ to be at least somewhat usable.
 .It Pa ~/.ow/browsers.db
 This file must be hashed with
 .Xr makemap 8
-or equivalent. It should contain a list of names to browser command
-mappings, e.g.
+or equivalent. It should contain name to command mappings, e.g.
 .Pp
 .Dl bloaty  firefox 
-.Dl copycat sgrax copycat
-.Dl lwp     lwp-request -fusEdt 7
+.Dl w3m     w3m -no-mouse
+.Pp
+.Dl # trace headers and redirects
+.Dl debug   lwp-request -fusEdt 7
+.Pp
+.Dl # for Mac OS X, see open(1)
 .Dl open    open -g
+.Pp
+.Dl # means to place the URL into a clipboard
+.Dl copycat sgrax copycat
 .Dl pbcopy  sgrax pbcopy
 .Pp
 These are used by
 .Fl o
-to run a browser by an alias for the real command, or where the command
-arguments are customized. The URL is always given as the last argument
-to the command. The command will be split on whitespace and passed to
+to run a command by an alias for the real command, or where the command
+arguments need be customized. The URL is always the last argument to the
+command. The command will be split on whitespace and passed to
 .Xr execvp 3 ;
 quoted whitespace is not supported.
 .Nm
 will try to exec whatever is given if there is no matching entry.
+.Pp
+.Dl $ Ic cat `which pbcopy`
+.Dl #!/bin/sh
+.Dl exec xsel -l /dev/null -i -b
 .It Pa ~/.ow/dirmap
-A list of regular expressions and destination URL pairs, for
-.Nm wv
-mode. The first matching expression is used. A
+A list of regular expression, destination URL, and optional tag for
+.Nm wv .
+The first matching expression is used. A
 .Qq file://
 URL will be
 generated if no match is found. Example:
@@ -128,11 +154,27 @@ then a URL such as
 .Pp
 will be generated.
 .Xr perlre 1
-details the syntax of the regular expression; named matches such as
+details the syntax; named matches such as
 .Qq (?<foo>...)
 will be substituted for any
 .Qq %{foo}
 in the destination URL.
+.Pp
+With
+.Fl t Ar tag
+only lines that match
+.Ar tag
+will be considered, and the tag will be made available as
+.Dv %{tag}
+for replacement in the destination:
+.Pp
+.Dl $ Ic egrep 'dev|prod' .ow/dirmap
+.Dl /cats/(?<rest>.+) http://%{tag}.example.org/%{rest} dev
+.Dl /cats/(?<rest>.+) http://%{tag}.example.org/%{rest} prod
+.Dl $ Ic wv -l -t dev cats/image/cat.jpg
+.Dl http://dev.example.org/image/cat.jpg
+.Dl $ Ic wv -l -t prod cats/image/cat.jpg
+.Dl http://prod.example.org/image/cat.jpg
 .It Pa ~/.ow/remap
 URL remapping file that contains regular expressions followed by a
 browser to use should a regular expression match the generated URL.
@@ -140,8 +182,13 @@ First match wins.
 .Pp
 .Dl # handle dict:// URL with open(1) (Mac OS X)
 .Dl ^dict:// open
+.Pp
 .Dl # use ftp(1) to download images
 .Dl (?i)\e.(?:gif|jpe?g|png)$ ftp
+.Pp
+See
+.Xr perlre 1
+for details on the syntax supported.
 .It Pa ~/.ow/shortcuts.db
 Shortcut to URL mapping. Build this file using
 .Xr makemap 8
@@ -151,31 +198,42 @@ followed by a
 For these,
 .Ar %@
 and any numbered
-.Ar %1
+.Ar %{1}
 will be filled in from the arguments given on the command line. Some
 examples may help.
 .Pp
-.Dl # Mac OS X Dictionary.app
-.Dl d@ dict://%1
+.Dl # no argument, no templating, visit URL directly
+.Dl metacpan https://search.metacpan.org/
+.Dl # template in the command line arguments
+.Dl metacpan@ https://metacpan.org/search?q=%@
 .Pp
-.Dl # man -k
-.Dl man@ http://man.openbsd.org/?query=%@&apropos=1
-.Dl # direct to a page (ow mansect 1 ls)
-.Dl mansect@ http://man.openbsd.org/man%1/%2.%1
+.Dl # Mac OS X Dictionary.app, single word search
+.Dl d@ dict://%{1}
 .Pp
-.Dl # no argument, visit URL directly
-.Dl metacpan    https://search.metacpan.org/
-.Dl # with %@ arguments will be + joined and passed along
-.Dl metacpan@   https://metacpan.org/search?q=%@
+.Dl # similar to `man -k ...` or `apropos ...`
+.Dl man@ https://man.openbsd.org/?apropos=1&query=%@
+.Dl # similar to `man 1 ls` -- `ow mansect 1 ls`
+.Dl mansect@ https://man.openbsd.org/man%{1}/%{2}.%{1}
 .Pp
 .Dl # RFC must be readable offline; download with
 .Dl # rsync -avz --delete --delete-excluded \e
-.Dl # ftp.rfc-editor.org::rfcs-text-only rfcs
-.Dl rfc@ file:///path/to/rfcs/rfc%1.txt
+.Dl # \& \& ftp.rfc-editor.org::rfcs-text-only rfcs
+.Dl rfc@ file:///path/to/rfcs/rfc%{1}.txt
 .Pp
 .Dl # and also for CommonLISP
 .Dl cli \& file:///.../HyperSpec/FrontMatter/Master-Index.html
-.Dl cli@ file:///.../HyperSpec/FrontMatter/Master-Index-%1.html
+.Dl cli@ file:///.../FrontMatter/Master-Index-%{1}.html
+.Pp
+.Dl # wildcard entries, if present, are used only when
+.Dl # nothing else matches. these may be problematic
+.Dl * https://duckduckgo.com/html
+.Dl *@ https://duckduckgo.com/html?q=%@
+.Pp
+If
+.Fl t Ar tag
+is given any
+.Dv %{tag}
+will be substituted with that value in the shortcut URL.
 .Sh EXIT STATUS
 .Ex -std
 .Sh EXAMPLES
@@ -185,8 +243,8 @@ examples may help.
 .Dl $ Ic makemap shortcuts
 .Dl $ Ic file shortcuts.db
 .Dl shortcuts.db: Berkeley DB 1.85 (Hash, version 2, native byte-order)
-.Dl $ Ic ow -l g web search
-.Dl https://duckduckgo.com/html?q=web+search
+.Dl $ Ic ow -l g cat photos
+.Dl https://duckduckgo.com/html?q=cat+photos
 .Pp
 If a system only has Postfix installed the
 .Xr postmap 1
@@ -194,12 +252,33 @@ tool can build
 .Pa shortcuts.db :
 .Pp
 .Dl $ Ic cd ~/.ow && postmap hash:shortcuts
+.Pp
+The
+.Pa *.db
+files could also be maintained with suitable
+.Xr DB_File 3p
+or
+.Xr dbopen 3
+code.
 .Sh SEE ALSO
 .Xr copycat 1 ,
 .Xr lwp-request 1 ,
 .Xr makemap 8 ,
-.Xr pbcopy 1 ,
+.Xr perlre 1 ,
 .Xr sgrax 1 ,
 .Xr w3m 1
+.Sh HISTORY
+This tool is based on the URL bar shortcut feature once offered by the
+OmniWeb browser (insofar as that used
+.Cm %@
+and
+.Cm %1
+to template URLs);
+.Nm
+was written so that the URL shortcuts were not tied to any one
+particular browser. Which is good, as the browsers used have varied
+since 2003. Meanwhile
+.Nm
+has acquired various new features and bugs.
 .Sh AUTHOR
 .An Jeremy Mates

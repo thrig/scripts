@@ -35,6 +35,7 @@ char *Flag_Chdir;     // -C
 int Flag_Dirmap;      // -d or "wv"
 int Flag_Listurl;     // -l
 char *Flag_Command;   // -o
+char *Flag_Tag;       // -t
 
 char *Config_Dir; // ~/.ow by default, see setup()
 
@@ -60,18 +61,20 @@ int main(int argc, char *argv[], char *env[]) {
     int ch;
 
 #ifdef __OpenBSD__
-    if (pledge("exec prot_exec rpath stdio", NULL) == -1) err(1, "pledge failed");
+    if (pledge("exec prot_exec rpath stdio", NULL) == -1)
+        err(1, "pledge failed");
 #endif
 
     if (strcmp(getprogname(), "wv") == 0) Flag_Dirmap = 1;
 
-    while ((ch = getopt(argc, argv, "h?AC:dlo:")) != -1) {
+    while ((ch = getopt(argc, argv, "h?AC:dlo:t:")) != -1) {
         switch (ch) {
         case 'A': Flag_Alwaysremap = 1; break;
         case 'C': Flag_Chdir = optarg; break;
         case 'd': Flag_Dirmap = 1; break;
         case 'l': Flag_Listurl = 1; break;
         case 'o': Flag_Command = optarg; break;
+        case 't': Flag_Tag = optarg; break;
         case 'h':
         case '?':
         default: emit_usage();
@@ -105,9 +108,9 @@ void dirmap(int argc, char *argv[]) {
         if ((path = getcwd(NULL, 0)) == NULL) err(1, "getcwd failed");
     }
 
-    eval_pv("sub dirmap {(my $path,my $re,$_)=@_;"
+    eval_pv("sub dirmap {(my $path,my $re,$_,my $tag)=@_;"
             "if ($path =~ m/$re/) {"
-            "my %tmpl = %+;"
+            "my %tmpl = %+; $tmpl{tag} = $tag if defined $tag;"
             "s/%\\{([^}]+)\\}/$tmpl{$1}/eg;"
             "return 1}return 0}",
             TRUE);
@@ -119,11 +122,14 @@ void dirmap(int argc, char *argv[]) {
     size_t linesize = 0;
     ssize_t linelen;
     while ((linelen = getline(&line, &linesize, fh)) != -1) {
-        if (*line == '#' || *line == '\0' || isblank(*line)) continue;
-        char *lp, *regex, *dest;
+        if (*line == '#' || *line == '\0' || isspace(*line)) continue;
+        char *lp, *regex, *dest, *tag = NULL;
         lp = line;
         if ((regex = strsep(&lp, " \t\r\n")) == NULL) continue;
         if ((dest = strsep(&lp, " \t\r\n")) == NULL) continue;
+        if (Flag_Tag && (tag = strsep(&lp, " \t\r\n")) != NULL)
+            if (*tag == '\0' || isspace(*tag) || strcmp(Flag_Tag, tag) != 0)
+                continue;
         dSP;
         ENTER;
         SAVETMPS;
@@ -132,6 +138,7 @@ void dirmap(int argc, char *argv[]) {
         mPUSHs(newSVpv(path, 0));
         mPUSHs(newSVpv(regex, 0));
         mPUSHs(newSVpv(dest, 0));
+        if (tag != NULL) mXPUSHs(newSVpv(tag, 0));
         PUTBACK;
         call_pv("dirmap", G_SCALAR);
         SPAGAIN;
@@ -149,7 +156,7 @@ void dirmap(int argc, char *argv[]) {
     fclose(fh);
 
     // fallback to file:// URL generation (this might instead throw an
-    // error should the mapping be deemed mandatory)
+    // error should a mapping be deemed mandatory)
     if (url == NULL)
         if (asprintf(&url, "file://%s", path) < 0) err(1, "asprintf failed");
 
@@ -157,21 +164,39 @@ void dirmap(int argc, char *argv[]) {
 }
 
 void emit_usage(void) {
-    fputs("Usage: ow [-Adl] [-C dir] [-o cmd] shortcut [args ..]\n"
-          "       wv [-Al]  [-C dir] [-o cmd] [file]\n",
+    fputs("Usage: ow [-Al] [-C dir] [-o cmd] [-t tag] shortcut [arg [..]]\n"
+          "       ow [-Al] [-C dir] [-o cmd] hostname-or-url\n"
+          "       wv [-Al] [-C dir] [-o cmd] [-t tag] [file]\n",
           stderr);
     exit(EX_USAGE);
 }
 
-// in the template (argv[0]) any %@ are replaced with "all+the+args",
-// and %1 with argv[1], %2 with argv[2], etc
+// in the template (which is in argv[0]) the %@ are replaced with
+// "all+the+args", and %{1} with argv[1], %{2} with argv[2], etc. also
+// %{tag} will get the -t tag argument, or the usual empty string
+// treatment should the tag not be present
+//
+// NOTE the numbered templates used to be %1, etc, but this will run
+// afoul URL that have already been escaped whereby a "%80" would be
+// templated into "", or "%8A" into "A" (or maybe to something else if
+// there had been 80 or more likely 8 arguments passed through)
+//
+//   perl -Mutf8 -MURI::Escape -E 'say uri_escape_utf8("À")'
 inline char *fill_in(int argc, char *argv[]) {
-    eval_pv("sub template_url {$_ = shift;"
-            "s/%([0-9]+|@)/$1 eq '@' ? join( '+', @_ ) : $_[$1-1] || ''/eg }",
+    eval_pv("sub template_url {my $tag = shift;$_ = shift;"
+            "s/(?:%(?<key>@)|%\\{(?<key>tag|[0-9]+)})/"
+            "if ($+{key} eq '@') { join '+', @_ }"
+            "elsif ($+{key} eq 'tag') { $tag }"
+            "else { $_[$+{key}-1] || '' }/eg}",
             TRUE);
     dSP;
     PUSHMARK(SP);
-    EXTEND(SP, argc);
+    // tag, template, argv[1], argv[2], ..
+    EXTEND(SP, argc + 1);
+    if (Flag_Tag != NULL)
+        mPUSHs(newSVpv(Flag_Tag, 0));
+    else
+        mPUSHs(newSVpvs(""));
     while (*argv) {
         mPUSHs(newSVpv(*argv, 0));
         argv++;
@@ -187,7 +212,7 @@ inline char *fill_in(int argc, char *argv[]) {
 // does the argument look like a hostname or URL? if so use that as the
 // URL to visit (so one can type `ow openbsd.org` which is assumed to be
 // a HTTP (or now HTTPS being the fashion) request). this obviously
-// rules out using "foo.bar" as shortcut keys
+// rules out using "foo.bar" as a shortcut
 inline char *host_or_url(char *arg) {
     char *url = NULL;
 
@@ -196,7 +221,8 @@ inline char *host_or_url(char *arg) {
             "$_=$arg;return 1"
             "} elsif ($arg =~ m{[^.][.][^.]}) {"
             "$_='https://'.$arg;"
-            "return 1}return 0}", TRUE);
+            "return 1}return 0}",
+            TRUE);
     dSP;
     ENTER;
     SAVETMPS;
@@ -256,7 +282,7 @@ inline char *remap(char *url) {
     size_t linesize = 0;
     ssize_t linelen;
     while ((linelen = getline(&line, &linesize, fh)) != -1) {
-        if (*line == '#' || *line == '\0' || isblank(*line)) continue;
+        if (*line == '#' || *line == '\0' || isspace(*line)) continue;
         char *lp, *regex, *newcmd;
         lp = line;
         if ((regex = strsep(&lp, " \t\r\n")) == NULL) continue;
@@ -327,23 +353,26 @@ void shortcut(int argc, char *argv[]) {
         shortcut_args(argc, argv, db);
 }
 
-// expand a shortcut, or otherwise do various "common sense" things
-// based on what the caller appears to have supplied
+// shortcut - expand a shortcut without arguments, or otherwise do
+// various "common sense" things based on what the caller appears to
+// have supplied
 inline void shortcut_onearg(int argc, char *argv[], DB *db) {
     char *url;
     // +1 as DB must match the \0 on the end
     if ((url = query(db, *argv, strlen(*argv) + 1))) {
-        visit(url);
+        argv[0] = url;
+        visit(fill_in(1, argv));
     } else if ((url = host_or_url(*argv))) {
         visit(url);
     } else if ((url = query(db, "*", (size_t) 2))) {
-        visit(url);
+        argv[0] = url;
+        visit(fill_in(1, argv));
     } else {
         errx(1, "not sure what to do with '%s'", *argv);
     }
 }
 
-// template the argv into a URL
+// shortcut@ - template the argvs into a URL
 inline void shortcut_args(int argc, char *argv[], DB *db) {
     char *key, *tmpl;
     size_t len;
@@ -356,6 +385,13 @@ inline void shortcut_args(int argc, char *argv[], DB *db) {
     if (sprintf(key, "%s@", argv[0]) < 0) err(1, "sprintf failed");
 
     if ((tmpl = query(db, key, len))) {
+        argv[0] = tmpl;
+        visit(fill_in(argc, argv));
+    } else if ((tmpl = query(db, "*@", (size_t) 3))) {
+        // NOTE may trample the program name; if this is a problem will
+        // need to instead alloc a new **blah and copy in argv[1..
+        argv--;
+        argc++;
         argv[0] = tmpl;
         visit(fill_in(argc, argv));
     } else {
