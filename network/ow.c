@@ -61,6 +61,7 @@ int main(int argc, char *argv[], char *env[]) {
     int ch;
 
 #ifdef __OpenBSD__
+    // prot_exec is due to the xs_init so can go if that goes
     if (pledge("exec prot_exec rpath stdio", NULL) == -1)
         err(1, "pledge failed");
 #endif
@@ -430,6 +431,9 @@ inline char **tokenize(char *command, char *url) {
 // various things
 void visit(char *url) {
     if (Flag_Listurl) {
+#ifdef __OpenBSD__
+    if (pledge("stdio", NULL) == -1) err(1, "pledge failed");
+#endif
         puts(url);
         exit(EXIT_SUCCESS);
     }
@@ -458,6 +462,10 @@ void visit(char *url) {
 
     if (Flag_Chdir)
         if (chdir(Flag_Chdir) == -1) err(1, "chdir failed '%s'", Flag_Chdir);
+
+#ifdef __OpenBSD__
+    if (pledge("exec", NULL) == -1) err(1, "pledge failed");
+#endif
 
     // ideally would like something like Text::ParseWords qw(shellwords)
     // from the Perl code here, but for now split on spaces and pass the
