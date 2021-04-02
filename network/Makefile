@@ -17,7 +17,7 @@ portpester: portpester.c
 macutil.o: macutil.c macutil.h
 	$(CC) -c $(CFLAGS) macutil.c -o macutil.o
 
-ow: ow.c
+ow: depend ow.c
 	`perl -MConfig -e 'print $$Config{cc}'` -O2 -Wall -fno-diagnostics-color -o ow ow.c `perl -MExtUtils::Embed -e ccopts -e ldopts`
 
 randmac: randmac.c macutil.o macutil.h
@@ -35,6 +35,11 @@ validate-rsnapshot: validate-rsnapshot.c
 
 clean:
 	git clean --force -x
+
+# probably a bit high for what ow(1) actually needs, which may be
+# somewhere in the 5.10 to 5.14 region
+depend:
+	perl -e 'use 5.24.0'
 
 test: ipint localaddr macnorm ow v4addr v6addr validate-rsnapshot
 	@prove --nocolor

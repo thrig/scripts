@@ -111,8 +111,8 @@ void dirmap(int argc, char *argv[]) {
 
     eval_pv("sub dirmap {(my $path,my $re,$_,my $tag)=@_;"
             "if ($path =~ m/$re/) {"
-            "my %tmpl = %+; $tmpl{tag} = $tag if defined $tag;"
-            "s/%\\{([^}]+)\\}/$tmpl{$1}/eg;"
+            "my %tmpl = %+; $tmpl{tag} = $tag // '';"
+            "s/%\\{([^}]+)}/$tmpl{$1}/eg;"
             "return 1}return 0}",
             TRUE);
     FILE *fh;
