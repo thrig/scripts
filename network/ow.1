@@ -1,4 +1,4 @@
-.Dd March 31 2021
+.Dd April  2 2021
 .Dt OW 1
 .nh
 .Os
@@ -186,6 +186,9 @@ First match wins.
 .Dl # use ftp(1) to download images
 .Dl (?i)\e.(?:gif|jpe?g|png)$ ftp
 .Pp
+.Dl # route XKCD requests through xkcdget(1)
+.Dl ^https?://xkcd\.com/[0-9] xkcdget
+.Pp
 See
 .Xr perlre 1
 for details on the syntax supported.
@@ -223,6 +226,10 @@ examples may help.
 .Dl # and also for CommonLISP
 .Dl cli \& file:///.../HyperSpec/FrontMatter/Master-Index.html
 .Dl cli@ file:///.../FrontMatter/Master-Index-%{1}.html
+.Pp
+.Dl # important things
+.Dl xkcd https://xkcd.com/
+.Dl xkcd@ https://xkcd.com/%{1}
 .Pp
 .Dl # wildcard entries, if present, are used only when
 .Dl # nothing else matches. these may be problematic

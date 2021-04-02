@@ -126,9 +126,9 @@ void dirmap(int argc, char *argv[]) {
         if (*line == '#' || *line == '\0' || isspace(*line)) continue;
         char *lp, *regex, *dest, *tag = NULL;
         lp = line;
-        if ((regex = strsep(&lp, " \t\r\n")) == NULL) continue;
-        if ((dest = strsep(&lp, " \t\r\n")) == NULL) continue;
-        if (Flag_Tag && (tag = strsep(&lp, " \t\r\n")) != NULL)
+        if ((regex = strsep(&lp, " \t\v\r\n")) == NULL) continue;
+        if ((dest = strsep(&lp, " \t\v\r\n")) == NULL) continue;
+        if (Flag_Tag && (tag = strsep(&lp, " \t\v\r\n")) != NULL)
             if (*tag == '\0' || isspace(*tag) || strcmp(Flag_Tag, tag) != 0)
                 continue;
         dSP;
@@ -286,8 +286,8 @@ inline char *remap(char *url) {
         if (*line == '#' || *line == '\0' || isspace(*line)) continue;
         char *lp, *regex, *newcmd;
         lp = line;
-        if ((regex = strsep(&lp, " \t\r\n")) == NULL) continue;
-        if ((newcmd = strsep(&lp, " \t\r\n")) == NULL) continue;
+        if ((regex = strsep(&lp, " \t\v\r\n")) == NULL) continue;
+        if ((newcmd = strsep(&lp, " \t\v\r\n")) == NULL) continue;
         dSP;
         ENTER;
         SAVETMPS;
@@ -411,7 +411,7 @@ inline char **tokenize(char *command, char *url) {
     if ((cargs = calloc(argc, sizeof(char **))) == NULL)
         err(1, "calloc failed");
 
-    while ((token = strsep(&command, " \t\r\n")) != NULL) {
+    while ((token = strsep(&command, " \t\v\r\n")) != NULL) {
         cargs[count++] = token;
         if (count + 2 > argc) {
             argc <<= 1;
@@ -464,7 +464,7 @@ void visit(char *url) {
         if (chdir(Flag_Chdir) == -1) err(1, "chdir failed '%s'", Flag_Chdir);
 
 #ifdef __OpenBSD__
-    if (pledge("exec", NULL) == -1) err(1, "pledge failed");
+    if (pledge("exec stdio", NULL) == -1) err(1, "pledge failed");
 #endif
 
     // ideally would like something like Text::ParseWords qw(shellwords)
@@ -473,7 +473,7 @@ void visit(char *url) {
     // command, which some (myself included) will consider as a positive
     char **cargs = tokenize(command, url);
     execvp(*cargs, cargs);
-    err(1, "execlp failed");
+    err(1, "execlp failed '%s'", *cargs);
 }
 
 // otherwise "Can't load module Tie::Hash::NamedCapture, dynamic loading

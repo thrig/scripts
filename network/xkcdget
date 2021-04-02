@@ -1,10 +1,7 @@
 #!/usr/bin/env perl
 #
-# Not running a modern web browser (save firefox on some virt when some
-# interaction with a javascript application is necessary) does mean that
-# alternative means of viewing webcomics must be made.
-#
-# Usage:
+# xkcdget - not running bloat browsers suggests that alternative means
+# of viewing webcomics be made
 #
 #   xkcdget
 #   xkcdget 123
@@ -24,11 +21,9 @@ my $img_dir = catfile( File::HomeDir->my_home, 'share/xkcd' );
 
 my $img_viewer = 'feh';
 
-GetOptions(
-    'preview|n' => \my $Flag_Preview,
-    'timeout=i' => \my $Flag_Timeout
-) or die "could not parse options\n";
+GetOptions( 'timeout=i' => \my $Flag_Timeout ) or exit 64;
 
+# patience, who has time for that?
 $Flag_Timeout //= 7;
 
 my $comic_num      = shift;
@@ -36,25 +31,28 @@ my $show_comic_num = 0;
 if ( !defined $comic_num ) {
     $show_comic_num = 1;
     $comic_num      = 0;
+} elsif ( $comic_num =~ m{^https?://xkcd\.com/([0-9]+)$} ) {
+    # extract number from URL so can remap from ow(1)
+    $comic_num = $1;
 } else {
     die "comic number must be a number (or omit)\n" if !is_comicnum($comic_num);
 }
 
 chdir $img_dir or die "could not chdir to $img_dir: $!\n";
 
-my $extension = 'png';
+my $extension  = 'png';
 my $comic_file = join '.', $comic_num, $extension;
 
 if ( !-e $comic_file ) {
     my $agent = HTTP::Tiny->new( timeout => $Flag_Timeout, max_size => 1234577 );
     my $url =
-      'http://xkcd.com/' . ( $comic_num > 0 ? "$comic_num/" : '' ) . 'info.0.json';
+      'https://xkcd.com/' . ( $comic_num > 0 ? "$comic_num/" : '' ) . 'info.0.json';
 
     my $resp = $agent->get($url);
     if ( $resp->{success} ) {
         # KLUGE on the perhaps rash assumption that XKCD uses UTF-8
         my $json = JSON::MaybeXS->new( utf8 => 1 );
-        my $dat = $json->decode( $resp->{content} );
+        my $dat  = $json->decode( $resp->{content} );
 
         $comic_num = $dat->{num} // '';
         die "unexpected comic number '$comic_num' from XKCD\n"
@@ -80,8 +78,8 @@ if ( !-e $comic_file ) {
             warn $comic_num, "\n" if $show_comic_num;
         }
     } else {
-        # Am not on the Internet or network connectivity failed; try to show
-        # the latest from the cache
+        # not on the Internet or network connectivity failed; try to
+        # show the latest from the cache
         opendir my $dh, '.' or die "could not opendir '.': $!\n";
         $comic_file =
           max_by { stat($_)->mtime } grep { m/^\d{1,5}\.[a-z]{1,4}/ } readdir $dh;
@@ -95,10 +93,6 @@ if ( !-e $comic_file ) {
     }
 }
 
-if ( !$Flag_Preview ) {
-    exec $img_viewer, $comic_file;
-}
+exec $img_viewer, $comic_file;
 
-sub is_comicnum {
-    $_[0] =~ m/^\d{1,5}$/a;
-}
+sub is_comicnum { $_[0] =~ m/^[0-9]+$/ }
