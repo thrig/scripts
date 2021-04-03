@@ -4,6 +4,7 @@ CFLAGS=-std=c99 -O2 -Wall -pedantic -fno-diagnostics-color -fstack-protector-str
 # 10.11 with MacPorts
 CFLAGS+=`pkg-config --cflags --libs x11`
 
+xgeometry: xgeometry.c
 xtcidu: xtcidu.c
 
 clean:
