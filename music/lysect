@@ -1,0 +1,59 @@
+#!/usr/bin/env perl
+#
+# lysect - toggle particular sections in LilyPond formatted text that
+# follow particular conventions
+
+use 5.14.0;
+use warnings;
+
+my $Flag_Count = shift // 0;
+die "Usage: lysect [count] [-|file ..]\n" unless $Flag_Count =~ m/^(?a)\d+$/;
+shift if defined $ARGV[0] and $ARGV[0] eq '-';
+$^I = 1 if @ARGV;
+
+my ( $section_re, @sections );
+
+while (readline) {
+    if (m[^
+        (?<prefix>zgike)(?<tag>\S+) \s+[=] |
+        (?<prefix>m)(?<tag>sop|alto|tenor|bass) \s+[=]
+        ]x
+    ) {
+        $section_re = matcher( $+{prefix}, $+{tag}, $_ );
+    } elsif (m[^\}]) {
+        undef $section_re;
+        if (@sections) {
+            dosect( \@sections );
+            undef @sections;
+        }
+    } elsif ( defined $section_re
+        and m[^\s*(?:%\s*)?(?<sname>$section_re.*)] ) {
+        push @sections, $+{sname};
+        next;
+    }
+    print;
+}
+
+sub dosect {
+    my ($sects) = @_;
+    if ( $Flag_Count == 0 ) {
+        say '  ' . $_ for @$sects;
+    } else {
+        my $disable = @$sects - $Flag_Count;
+        $disable = 0 if $disable < 0;
+        for my $sect (@$sects) {
+            say( ( ( $disable-- > 0 ) ? '% ' : '  ' ), $sect );
+        }
+    }
+}
+
+sub matcher {
+    my ( $prefix, $tag, $line ) = @_;
+    if ( $prefix eq 'm' ) {
+        return qr[\\\Q$tag];
+    } elsif ( $prefix eq 'zgike' ) {
+        return qr[\\li];
+    } else {
+        die "cannot handle prefix=$prefix tag=$tag line=$line\n";
+    }
+}
