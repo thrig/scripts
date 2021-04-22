@@ -207,6 +207,8 @@ inline void x_font(XFontStruct **font, int *width, int *height) {
     // multiplication which is not perfect but hopefully is good enough
     XTextExtents(*font, "Q", 1, &dir, &asc, &dsc, &xcs);
 
+    if (xcs.width < 1) errx(1, "invalid no-width font '%s'", Flag_Font);
+
     // TODO may need to limit the width (or the buffer, or more likely
     // use a smaller font size) if this turns out to be too wide. or
     // support -geometry and leave that and the font up to the caller...

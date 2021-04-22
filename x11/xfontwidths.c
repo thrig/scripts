@@ -26,6 +26,10 @@ int main(int argc, char *argv[]) {
     int maxnames, total;
     size_t len;
 
+#ifdef __OpenBSD__
+    if (pledge("rpath stdio unix", NULL) == -1) err(1, "pledge failed");
+#endif
+
     if (argc != 2) {
         fputs("Usage: xfontwidths text-phrase\n", stderr);
         exit(EX_USAGE);
