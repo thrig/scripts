@@ -65,9 +65,7 @@ int main(int argc, char *argv[]) {
         case 'n': Flag_Nonewline = 1; break;
         case 'h':
         case '?':
-        default:
-            emit_help();
-            /* NOTREACHED */
+        default: emit_help();
         }
     }
     argc -= optind;

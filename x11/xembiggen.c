@@ -1,23 +1,30 @@
-// xembiggen - display text in biggest font possible (while assuming a
-// fairly short maximum text length). for those awkward moments when
-// someone asks you the coffee shop wifi password amid noise and
-// mumbling over a mask. granted, this is a technological solution to
-// what really is a social problem
+//    xembiggen - display text using the biggest font size possible
+// (assuming a fairly short maximum text length). for those awkward
+// moments when someone asks you the coffee shop wifi password amid
+// noise and mumbling over a mask. granted, this is a technological
+// solution to what really is a social problem
 
 #include <X11/Xft/Xft.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
 #include <err.h>
+#include <errno.h>
+#include <getopt.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sysexits.h>
 #include <unistd.h>
 
+char *Flag_Font; // -F
+
 Display *X_Dpy; // XOpenDisplay
 int X_Snum;     // DefaultScreen
 Window X_Win;   // main window
 
+void emit_help(void);
+static char *fixup_fontname(const char *fontname);
 static XftFont *fontus_maximus(char *fontname, char *text, size_t len,
                                int wwidth, int wheight);
 static XftFont *getafont(const char *fontname);
@@ -33,22 +40,33 @@ int main(int argc, char *argv[]) {
     // run fc-list(1) to see what fonts are available
     //
     // the \0\0 are to pad the string for the snprintf that fiddle with
-    // the font size... the font size cannot be larger than 999
-    char bytes[3], fontname[] = "Utopia:rgba=vbgr:pixelsize=32\0\0";
-    int count, width, height;
+    // the font size
+    char bytes[3], *fontname = strdup("Utopia:pixelsize=32\0\0");
+    int ch, count, width, height;
     size_t len;
 
 #ifdef __OpenBSD__
     if (pledge("rpath stdio unix", NULL) == -1) err(1, "pledge failed");
 #endif
 
-    if (argc != 2) errx(1, "Usage: xembiggen text-label\n");
-    len = strlen(argv[1]);
+    while ((ch = getopt(argc, argv, "h?F:")) != -1) {
+        switch (ch) {
+        case 'F': Flag_Font = optarg; break;
+        default: emit_help();
+        }
+    }
+    argc -= optind;
+    argv += optind;
+
+    if (argc != 1) emit_help();
+
+    if (Flag_Font) fontname = fixup_fontname(Flag_Font);
 
     x_init(argc, argv, "xembiggen", "Xmb", "Xembiggen", "Xembiggen", &width,
            &height);
 
-    font = fontus_maximus(fontname, argv[1], len, width, height);
+    len  = strlen(argv[0]);
+    font = fontus_maximus(fontname, argv[0], len, width, height);
 
     XMapWindow(X_Dpy, X_Win);
     draw = XftDrawCreate(X_Dpy, X_Win, DefaultVisual(X_Dpy, X_Snum),
@@ -64,7 +82,7 @@ int main(int argc, char *argv[]) {
             if (xev.xexpose.count != 0) break;
             // TODO ideally minimize changes instead of entire string redraw
             XftDrawStringUtf8(draw, &fgcolor, font, 0, font->ascent,
-                              (const FcChar8 *) argv[1], len);
+                              (const FcChar8 *) argv[0], len);
             break;
         case KeyPress:
             count = XLookupString(&xev.xkey, bytes, sizeof(bytes), NULL, NULL);
@@ -78,6 +96,47 @@ CLEANUP:
     XftDrawDestroy(draw);
     x_destroy();
     exit(EXIT_SUCCESS);
+}
+
+void emit_help(void) {
+    fputs("Usage: xembiggen [-F font] text-label\n", stderr);
+    exit(EX_USAGE);
+}
+
+static char *fixup_fontname(const char *fontname) {
+    char *ep, *fp = NULL, *input, *output, *np;
+    input = strdup(fontname);
+    size_t len;
+
+    while (fp == NULL) {
+        fp = strstr(input, ":pixelsize=");
+        if (fp != NULL) {
+            ep = fp + 11;
+            // any following :... attributes?
+            np = strchr(ep, ':');
+            if (np != NULL) {
+                // copy remainder over the pixelsize entry
+                len = strlen(np);
+                memmove(fp, np, len);
+                *(fp + len) = '\0';
+                // maybe more pixelsize remain?
+                fp = NULL;
+            } else {
+                // strip tail position pixelsize
+                *fp = '\0';
+            }
+        } else {
+            break;
+        }
+    }
+
+    len = strlen(input);
+    if (len > SIZE_MAX - 15) errc(1, EOVERFLOW, "overflow");
+    if ((output = calloc(1, len + 15)) == NULL) err(1, "calloc failed");
+    strcat(output, input);
+    strcat(output + len, ":pixelsize=32");
+    free(input);
+    return output;
 }
 
 // measure twice, cut once - find the maximum font size (within limits)
