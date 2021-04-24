@@ -46,7 +46,14 @@ int main(int argc, char *argv[]) {
     size_t len;
 
 #ifdef __OpenBSD__
-    if (pledge("rpath stdio unix", NULL) == -1) err(1, "pledge failed");
+    // wpath with no allowed writes is to help protect the process
+    // from abortion should fontconfig desire to update the caches.
+    // run fc-cache(1) now and then especially after updates to the
+    // font files
+    if (pledge("rpath stdio unix unveil wpath", NULL) == -1)
+        err(1, "pledge failed");
+    if (unveil("/", "r") == -1) err(1, "unveil failed");
+    if (unveil(NULL, NULL) == -1) err(1, "unveil failed");
 #endif
 
     while ((ch = getopt(argc, argv, "h?F:")) != -1) {
