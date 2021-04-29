@@ -5,14 +5,15 @@
 
 use feature qw(say);
 
-@bigterms = qw(cous excel mf spleen tt wr);
+@bigterms = qw(cous cous2 excel mf rogue spleen wr);
 @shell    = qw(/bin/ksh -l);
 
 if (@ARGV) {
+    $ARGV[0] =~ s/^rogue$/wr/;
     if ( grep { $ARGV[0] eq $_ } @bigterms ) {
         delete $ENV{TMUX};
         exec( 'solitary', $ENV{HOME},
-            qw(xterm -tn xterm-256color +cm +dc +itc -class),
+            qw(xterm -tn xterm-256color +bdc +cm +dc +itc -class),
             "$ARGV[0]term", '-e', @shell )
           or die "exec failed: $!\n";
     }
