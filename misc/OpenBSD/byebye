@@ -1,0 +1,6 @@
+#!/bin/sh
+fc-cache
+cd "$HOME" || exit 1
+find tmp -mindepth 1 -mtime +30 -delete
+rm -rf tmp/cfu.* tmp/r-fu.* .w3m/cookie .w3m/history .w3m/w3m{cache,src,tmp}* .slime-history.eld .node_repl_history .sqlite_history .rlwrap/*_history 2>/dev/null
+exec doas shutdown -h now

@@ -5,17 +5,17 @@
 
 use feature qw(say);
 
-@bigterms = qw(cous cous2 excel mf rogue spleen wr);
+@bigterms = qw(cous cous2 mf rogue wr);
 @shell    = qw(/bin/ksh -l);
 
 if (@ARGV) {
     $ARGV[0] =~ s/^rogue$/wr/;
     if ( grep { $ARGV[0] eq $_ } @bigterms ) {
         delete $ENV{TMUX};
-        exec( 'solitary', $ENV{HOME},
-            qw(xterm -tn xterm-256color +bdc +cm +dc +itc -class),
-            "$ARGV[0]term", '-e', @shell )
-          or die "exec failed: $!\n";
+        exec 'solitary', $ENV{HOME},
+          qw(xterm -tn xterm-256color +bc +bdc +cm +dc +itc -class),
+          "$ARGV[0]term", '-e', @shell;
+        die "exec failed: $!\n";
     }
 }
 
