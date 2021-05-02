@@ -36,10 +36,9 @@ validate-rsnapshot: validate-rsnapshot.c
 clean:
 	git clean --force -x
 
-# probably a bit high for what ow(1) actually needs, which may be
-# somewhere in the 5.10 to 5.14 region
+# %+ internal in Perl 5.32, see perl5320delta(1). otherwise must dynaload
 depend:
-	perl -e 'use 5.24.0'
+	perl -e 'use 5.32.0'
 
 test: ipint localaddr macnorm ow v4addr v6addr validate-rsnapshot
 	@prove --nocolor

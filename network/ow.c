@@ -40,7 +40,6 @@ char *Flag_Tag;       // -t
 char *Config_Dir; // ~/.ow by default, see setup()
 
 static PerlInterpreter *my_perl;
-static void xs_init(pTHX);
 EXTERN_C void boot_DynaLoader(pTHX_ CV *cv);
 
 void dirmap(int, char **);
@@ -61,9 +60,7 @@ int main(int argc, char *argv[], char *env[]) {
     int ch;
 
 #ifdef __OpenBSD__
-    // prot_exec is due to the xs_init so can go if that goes
-    if (pledge("exec prot_exec rpath stdio", NULL) == -1)
-        err(1, "pledge failed");
+    if (pledge("exec rpath stdio", NULL) == -1) err(1, "pledge failed");
 #endif
 
     if (strcmp(getprogname(), "wv") == 0) Flag_Dirmap = 1;
@@ -332,7 +329,7 @@ inline void setup(int argc, char *argv[], char *env[]) {
     if ((my_perl = perl_alloc()) == NULL) errx(1, "perl_alloc failed");
     perl_construct(my_perl);
     char *embed[] = {"", "-e", "0", NULL};
-    if (perl_parse(my_perl, xs_init, 3, embed, NULL) != 0)
+    if (perl_parse(my_perl, NULL, 3, embed, NULL) != 0)
         errx(1, "perl_parse failed");
     PL_exit_flags |= PERL_EXIT_DESTRUCT_END;
 }
@@ -432,7 +429,7 @@ inline char **tokenize(char *command, char *url) {
 void visit(char *url) {
     if (Flag_Listurl) {
 #ifdef __OpenBSD__
-    if (pledge("stdio", NULL) == -1) err(1, "pledge failed");
+        if (pledge("stdio", NULL) == -1) err(1, "pledge failed");
 #endif
         puts(url);
         exit(EXIT_SUCCESS);
@@ -474,14 +471,6 @@ void visit(char *url) {
     char **cargs = tokenize(command, url);
     execvp(*cargs, cargs);
     err(1, "execlp failed '%s'", *cargs);
-}
-
-// otherwise "Can't load module Tie::Hash::NamedCapture, dynamic loading
-// not available in this perl"; need %+ support for easy url templating
-// in dirmap (this is rumored to be fixed in perl 5.32?)
-EXTERN_C void xs_init(pTHX) {
-    char *file = __FILE__;
-    newXS("DynaLoader::boot_DynaLoader", boot_DynaLoader, file);
 }
 
 // yes there is lots of memory not being free'd nor database handles
