@@ -121,7 +121,7 @@ $SIG{ALRM} = sub { die "timeout\n" };
 for my $conn ( shuffle values %seen ) {
     my $max_wait = scalar(@$conn) * $MAX_DELAY;
 
-    eval {
+    my $ok = eval {
         alarm $max_wait;
 
         my $io = IO::Socket::INET->new( PeerAddr => "$DST_IP:$PORT", Proto => "tcp" )
@@ -156,7 +156,7 @@ for my $conn ( shuffle values %seen ) {
         $io->shutdown(2);
         $io->close();
     };
-    if ($@) {
+    unless ($ok) {
         # Could instead just warn here and keep hammering server. If so,
         # consider a sleep to avoid frequent quick failures from running up
         # the CPU. (Or similar if the script is being run in a loop from the

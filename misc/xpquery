@@ -42,7 +42,7 @@ for my $document (@ARGV) {
     # the otherwise unused $fh is to keep the (possible) temporary file
     # in scope so that it is not unlinked early
     my ( $fh, $file ) = get_file( URI->new($document), $document );
-    my $xpath = parse_xml( $file, $document );
+    my $xpath    = parse_xml( $file, $document );
     my $nodelist = $xpath->find($query);
 
     for my $node ( $nodelist->get_nodelist ) {
@@ -78,7 +78,7 @@ sub get_file {
     my ( $fh, $file );
     if ( $location->scheme ) {
         ( $fh, $file ) = tempfile( "xpquery.XXXXXXXXXX", TMPDIR => 1, UNLINK => 1 );
-        my $ua = make_agent();
+        my $ua       = make_agent();
         my $response = $ua->get( $location->canonical, ':content_file' => $file );
         die "xpquery: could not get '$document': " . $response->status_line . "\n"
           if !$response->is_success;
@@ -115,9 +115,8 @@ sub parse_xml {
     die "xpquery: unknown parse method '$Flag_Parse_Method'\n" if !defined $method;
 
     my $doc;
-    eval { $doc = $parser->$method($file) };
-    die "xpquery: could not parse '$document' with '$Flag_Parse_Method': $@\n"
-      if $@;
+    eval { $doc = $parser->$method($file); 1 }
+      or die "xpquery: could not parse '$document' with '$Flag_Parse_Method': $@\n";
 
     my $xc = XML::LibXML::XPathContext->new($doc);
     set_namespace($xc);

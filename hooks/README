@@ -1,0 +1,33 @@
+a homegrown setup for git repository wrangling, to avoid having to
+remember which repositories needed pushing where
+
+ * fatri - TODO
+ * log-update.c - have git call this as the post-commit and post-merge
+   hook, or as part of those if there is other code to be run. writes
+   repository names to a log file that `fatri` acts on
+ * pre-commit.no-master - prevents commits to master to help avoid merge
+   problems in the rare case someone else is also pushing to master in a
+   shared repository (rebase and merge, instead)
+ * repod - adds remote branches to git repositories
+
+INSTALL
+
+  make log-update
+
+  dir="$HOME"/libexec/git-hooks
+  mkdir -p $dir
+  cat log-update > $dir/post-commit
+  ln $dir/post-commit $dir/post-merge
+  chmod +x $dir/post-commit
+
+  # NOTE /var/empty is not, actually, empty on some Operating Systems
+  mkdir -p "$HOME"/var/empty
+
+GITCONFIG
+
+or the code could be used on a per-repository basis, etc
+
+  [core]
+    hooksPath = ~/libexec/git-hooks
+  [init]
+    templateDir = ~/var/empty

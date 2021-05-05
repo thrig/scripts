@@ -1,0 +1,1 @@
+exec perl -My -plE "$1"

@@ -38,6 +38,7 @@ char *Flag_Command;   // -o
 char *Flag_Tag;       // -t
 
 char *Config_Dir; // ~/.ow by default, see setup()
+char *Exec_Dir;   // a complication to restrict what can be exec'd
 
 static PerlInterpreter *my_perl;
 EXTERN_C void boot_DynaLoader(pTHX_ CV *cv);
@@ -60,7 +61,8 @@ int main(int argc, char *argv[], char *env[]) {
     int ch;
 
 #ifdef __OpenBSD__
-    if (pledge("exec rpath stdio", NULL) == -1) err(1, "pledge failed");
+    if (pledge("exec rpath stdio unveil", NULL) == -1) err(1, "pledge failed");
+    if (unveil("/", "r") == -1) err(1, "unveil failed");
 #endif
 
     if (strcmp(getprogname(), "wv") == 0) Flag_Dirmap = 1;
@@ -82,6 +84,12 @@ int main(int argc, char *argv[], char *env[]) {
     argv += optind;
 
     setup(argc, argv, env);
+
+    Exec_Dir = path_to("exec");
+#ifdef __OpenBSD__
+    if (unveil(Exec_Dir, "x") == -1) err(1, "unveil failed");
+    if (unveil(NULL, NULL) == -1) err(1, "unveil failed");
+#endif
 
     if (Flag_Dirmap) // -d or "wv"
         dirmap(argc, argv);
@@ -420,6 +428,9 @@ inline char **tokenize(char *command, char *url) {
     }
     cargs[count++] = url;
     cargs[count]   = (char *) NULL;
+
+    if (asprintf(&cargs[0], "%s/%s", Exec_Dir, cargs[0]) < 0)
+        err(1, "asprintf failed");
 
     return cargs;
 }

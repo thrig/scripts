@@ -2,8 +2,8 @@
 set -e
 doas syspatch
 getraw -n "ok?"
+quicklisp update
+getraw -n "ok?"
 doas pkg_add -u
 getraw -n "ok?"
 cpan-outdated -p | cpanm
-getraw -n "ok?"
-quicklisp update

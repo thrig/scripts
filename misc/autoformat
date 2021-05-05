@@ -8,8 +8,7 @@ $default = {
     squeeze => 1,
 };
 $input = '$user = {' . $ARGV[0] . '};';
-eval $input;
-%$user = () if $@;
-$out   = autoformat { %$default, %$user };
+eval "$input;1" or %$user = ();
+$out = autoformat { %$default, %$user };
 chomp $out;
 print $out;

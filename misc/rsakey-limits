@@ -26,8 +26,8 @@ KEYSIZE: for my $ks (qw(512 1024 2048 3072 4096)) {
         my $el = length $pk->encrypt("a");
         my $bl = length encode_base64( $pk->encrypt("a") );
 
-        eval { $pk->encrypt( "a" x $dl ); };
-        if ($@) {
+        my $ok = eval { $pk->encrypt( "a" x $dl ); 1 };
+        unless ($ok) {
             # failed on current length, so max one less
             $dl--;
             print "rsakey=$ks datalength=$dl encryptedlength=$el base64=$bl\n";

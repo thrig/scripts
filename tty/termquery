@@ -36,7 +36,7 @@ ReadMode 5;
 
 my $response;
 
-eval {
+my $ok = eval {
     local $SIG{ALRM} = sub { die "timeout\n" };
     alarm 7;
     print $ttyfh $query;
@@ -54,6 +54,6 @@ if ( defined $response ) {
     printf "%*vx\t$ascii_print\n", ' ', $response;
 }
 
-die if $@;
+die unless $ok;
 
 exit defined $response ? 0 : 1;

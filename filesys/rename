@@ -86,8 +86,7 @@ sub handle_file {
 
     my $origfile = $_;
 
-    eval $expr;
-    die "rename: unable to eval expression: $@\n" if $@;
+    eval "$expr;1" or die "rename: unable to eval expression: $@\n";
 
     return if rel2abs($origfile) eq rel2abs($_);
 

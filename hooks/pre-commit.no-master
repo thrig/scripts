@@ -1,0 +1,12 @@
+#!/bin/sh
+#
+# pre-commit.no-master - git hook that prevents commits to the master
+# branch (unless there is no HEAD in which case the commit is assumed
+# to be the initial commit and is allowed)
+
+git show-ref --head --quiet || exit 0
+
+if [ "`git symbolic-ref --quiet HEAD`" = refs/heads/master ]; then
+   echo >&2 "will not commit to master"
+   exit 1
+fi

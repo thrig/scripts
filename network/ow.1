@@ -1,4 +1,4 @@
-.Dd April  2 2021
+.Dd May  4 2021
 .Dt OW 1
 .nh
 .Os
@@ -105,9 +105,14 @@ to be at least somewhat usable.
 .It Pa ~/.ow/browsers.db
 This file must be hashed with
 .Xr makemap 8
-or equivalent. It should contain name to command mappings, e.g.
+or equivalent.
+Programs to exec are limited to those present in the
+.Pa ~/.ow/exec
+directory. 
+.Pa browsers.db
+should contain name to command mappings, e.g.
 .Pp
-.Dl bloaty  firefox 
+.Dl #bloaty firefox 
 .Dl w3m     w3m -no-mouse
 .Pp
 .Dl # trace headers and redirects
@@ -175,6 +180,11 @@ for replacement in the destination:
 .Dl http://dev.example.org/image/cat.jpg
 .Dl $ Ic wv -l -t prod cats/image/cat.jpg
 .Dl http://prod.example.org/image/cat.jpg
+.It Pa ~/.ow/exec
+This directory must contain applications to exec. On OpenBSD these
+applications must be copied from their original location. This is to try
+to limit exec to only the given programs, and not whatever an attacker
+might want to run.
 .It Pa ~/.ow/remap
 URL remapping file that contains regular expressions followed by a
 browser to use should a regular expression match the generated URL.

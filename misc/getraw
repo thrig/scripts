@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 #
-# Means to prompt for human interaction.
+# getraw - prompts for human interaction
 
 use 5.16.0;
 use warnings;
@@ -46,7 +46,7 @@ print $ttyfh "@ARGV" if @ARGV;
 for my $s (qw/HUP INT TERM USR1 USR2/) { $SIG{$s} = \&sig_bail }
 ReadMode( 3, $ttyfh );
 
-eval {
+my $ok = eval {
     if ($Flag_Timeout) {
         $SIG{ALRM} = sub { die "alarm\n" };
         alarm $Flag_Timeout;
@@ -66,14 +66,15 @@ eval {
     }
 
     while (1) {
-        my $key = ReadKey( 0, $ttyfh );
+        my $key  = ReadKey( 0, $ttyfh );
         my $code = $keys2exit->{$key};
         $code = $keys2exit->{any} if !defined $code;
         exit $code if defined $code;
     }
     alarm 0 if $Flag_Timeout;
+    1;
 };
-if ($@) {
+unless ($ok) {
     if ( $@ eq "alarm\n" ) {
         exit $Flag_Timeout_Status;
     } else {
