@@ -1,4 +1,4 @@
-.Dd August  4 2019
+.Dd May  5 2021
 .Dt SOLITARY 1
 .nh
 .Os
@@ -37,14 +37,14 @@ replaces itself with the given
 .Ar command
 or otherwise exits with a code >0 on error.
 .Sh EXAMPLES
-.Dl $ Ic solitary ~/tmp firefox
+.Dl $ Ic solitary ~/tmp mupdf ~/foo.pdf
 .Pp
 is similar to the
 .Cm zsh
 script
 .Bd -literal -offset indent
 #!/usr/bin/env zsh
-cd ~/tmp && firefox >&|/dev/null <&- &|
+cd ~/tmp && mupdf ~/foo.pdf >&|/dev/null <&- &|
 .Ed
 .Pp
 only with less ZSH and less line noise.

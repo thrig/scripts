@@ -23,4 +23,4 @@ cp -p -- "$FILE" "$HOME/usr/share/man/man$SECTION/`basename $FILE`"
 PAGE=`fdsplit root "$FILE"`
 PAGE=`basename "$PAGE"`
 
-exec man -- "$SECTION" "$PAGE"
+exec man -T ascii -- "$SECTION" "$PAGE"
