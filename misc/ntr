@@ -20,16 +20,19 @@ my @maps;
 sub ntr {
     my $n = ord $_[0];
     for my $m (@maps) {
-        if ( $n >= $m->[0] and $n <= $m->[1] ) {
-            return chr $n + $m->[2];
+        if ( @$m == 2 ) {
+            return chr $n + $m->[1] if $n == $m->[0];
+        } else {
+            return chr $n + $m->[2] if $n >= $m->[0] and $n <= $m->[1];
         }
     }
     return $_[0];
 }
 
 sub parse_ntr {
+    return $1, $2 if $_[0] =~ m/^(\d+):(-?\d+)$/a;
     return $1, $2, $3 if $_[0] =~ m/^(\d+),(\d+):(-?\d+)$/a;
-    die "could not parse: '$_[0]' (expect start,end:offset)\n";
+    die "could not parse: '$_[0]' (expect start[,end]:offset)\n";
 }
 @maps = map [ parse_ntr $_ ], @ARGV;
 

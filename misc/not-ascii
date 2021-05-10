@@ -6,8 +6,8 @@
 # very specific term ASCII to mean "anything textish, as opposed to
 # not-textual graphics" in casual conversation, for example:
 #
-# "but not a good looking ascii roguelike (like cogmind, or brogue)"
+#   "but not a good looking ascii roguelike (like cogmind, or brogue)"
 #
 # except Brogue uses Unicode, and not ASCII
 
-printf "%s\n" "$*" | ntr 97,122:65248 65,90:65248
+printf "%s\n" "$*" | ntr 32:12256 97,122:65248 65,90:65248

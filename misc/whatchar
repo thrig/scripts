@@ -5,6 +5,7 @@ eval 'exec perl -CAO -x -wS $0 ${1+"$@"}'
 use feature qw(say);
 use Unicode::UCD qw(charinfo);
 for (split //, "@ARGV") {
+    my $n = ord;
     my $info = charinfo ord;
     say '[' . $_ . '] U+' . $info->{code} . ' ' . $info->{name};
 }
