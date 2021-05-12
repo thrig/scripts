@@ -47,9 +47,8 @@ if {[string equal $progname share-file]} {
 }
 
 exec -ignorestderr -- scp -q $name gh:www-tmp/
-exec -ignorestderr -- ssh gh "chmod 644 www-tmp/$name"
-
 set name [file tail $name]
+exec -ignorestderr -- ssh gh "chmod 644 www-tmp/\"$name\""
 
 set fh [open ~/.ssh/config]
 while {[gets $fh line] >= 0} {
