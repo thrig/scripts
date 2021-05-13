@@ -23,6 +23,11 @@ set progname [file tail $argv0]
 set name [lindex $argv 0]
 
 if {[string equal $progname share-file]} {
+    # NOTE this may fail on single-byte filenames that have the 8th bit
+    # set; [encoding convertto ascii $file] may let such pass but might
+    # cause problems for files that are in some encoding that uses that
+    # 8th bit (why the ascii convertto lets the 8th bit garbage through
+    # is another question) but I haven't tested that case
     if {![file exists $name]} {
         puts stderr "no such file '$name'"
         exit 1
@@ -35,20 +40,22 @@ if {[string equal $progname share-file]} {
 
     cd ~/tmp
 
-    # this used to be `scrot` but that does not let us grab a specific
-    # window that has just been raised; otherwise, any overlapping
-    # windows occlude that which is unraised
     set capture imlib2_grab
     if {[string equal $progname share-window]} {
-        lappend capture -id [exec -ignorestderr -- xdotool selectwindow windowraise getwindowfocus]
+        lappend capture -id [exec -ignorestderr xdotool selectwindow windowraise getwindowfocus]
     }
     exec -ignorestderr -- {*}$capture $name
     exec -ignorestderr -- pngcrush -q -ow $name 2> /dev/null
 }
 
 exec -ignorestderr -- scp -q $name gh:www-tmp/
+# doing a remote chmod on a filename turns out to be tricky given shell
+# quoting and non-ASCII character issues over SSH, so instead hand that
+# off to a script (an inode change service could also detect the change
+# and act on it)
+exec -ignorestderr -- ssh gh ./www-fixperm
+
 set name [file tail $name]
-exec -ignorestderr -- ssh gh "chmod 644 www-tmp/\"$name\""
 
 set fh [open ~/.ssh/config]
 while {[gets $fh line] >= 0} {
