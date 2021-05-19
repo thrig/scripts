@@ -1,0 +1,24 @@
+#!/bin/sh
+#
+# launch-chromium - start the Chromium operating system and clean things
+# up after (hopefully not very long) that OS is shutdown. the Firefox
+# operating system, meanwhile, is only rendering white tabs, perhaps
+# related to the glx crash message
+#
+# something like `... | xsel -i -n -b` will be necessary to paste to
+# them as these OS use a non-standard X selection mode
+
+cd "$HOME"/tmp || exit 1
+# or one might instead fiddle with /etc/chromium/unveil.main
+unset TMP
+unset TMPDIR
+
+# whatever this is needs to be running
+eval `dbus-launch --sh-syntax --exit-with-session`
+
+/usr/local/bin/chrome
+
+pkill dbus
+
+# I thought I had said "no" to this in ~/.config/user-dirs.* ...
+rm -rf "$HOME"/Downloads
