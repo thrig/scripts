@@ -1,0 +1,12 @@
+#!/bin/sh
+#
+# https://www.lojban.org/publications/cll/cll_v1.1_book.pdf
+
+CLL=cll_v1.1_book.pdf
+
+xdotool search --name "$CLL" windowactivate && exit 0
+
+# this don't take a -geometry argument, so we instead
+solitary "$HOME"/tmp mupdf -r 216 "$HOME"/reference/lingua/lojban/"$CLL"
+sleep 1
+exec xdotool search --sync --name "$CLL" windowmove 0 0 windowsize `xgeometry | sed 's/\+.*//;s/x/ /'` windowfocus
