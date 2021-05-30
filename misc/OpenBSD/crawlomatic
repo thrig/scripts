@@ -1,0 +1,59 @@
+#!/usr/local/bin/expect
+#
+# crawlomatic - login to a DCSS server and start (or resume) a game,
+# plus some other quality of life improvements
+
+set timeout 7
+
+log_file ~/tmp/game-[clock seconds].elog
+
+set lpass [open ~/.crawlpass]
+gets $lpass login
+gets $lpass password
+close $lpass
+
+# NOTE use ~/.ssh/config to set the username, public key, and to turn
+# off forwardings and other needless protocol features
+spawn -noecho ssh crawl.akrasiac.org
+
+expect -ex Login
+send -raw L
+
+expect -ex "Please enter your username"
+send -- "$login\r"
+expect -ex password
+send -- "$password\r"
+
+# play on trunk
+expect -ex "Logged in as:"
+send -raw T
+expect -ex "Game selected"
+send -raw P
+
+expect {
+    # new game -- drop to interact mode
+    -ex "select your species" {}
+
+    # already game -- hard to detect with channel.plain = mute
+    -ex Health: {}
+
+    # automate around some trunk complications
+    -ex tournament { send -raw Y; exp_continue }
+    -ex "your save to the latest version" {
+        send -raw T
+        expect -ex "any key to continue"
+        send -raw " "
+        exp_continue
+    }
+
+    # needed?
+    #-ex --more-- { send -raw " "; exp_continue }
+}
+
+interact {
+    # crawl has too many interrupts, and it's not clear in the docs how
+    # to turn them all off, except only for when a monster shows up with
+    # a disto weapon or such
+    -o -ex --more-- { send -raw " " }
+    eof { return }
+}
