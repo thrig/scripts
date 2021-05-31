@@ -13,7 +13,10 @@ cd "$HOME"/tmp || exit 1
 unset TMP
 unset TMPDIR
 
-# whatever this is needs to be running
+# whatever this is needs to be running (rumor on #openbsd is that this
+# may not be necessary (if one ignores the dbus logs from chrome?) but
+# given how disgustingly slow chrome is to start, and that I've
+# uninstalled it, meanwhile...)
 eval `dbus-launch --sh-syntax --exit-with-session`
 
 /usr/local/bin/chrome

@@ -1,5 +1,7 @@
 /* localaddr - show local network addresses */
 
+#include <arpa/inet.h>
+
 #include <sys/socket.h>
 #include <sys/types.h>
 
@@ -13,10 +15,16 @@
 #include <sysexits.h>
 #include <unistd.h>
 
+struct v6hilo {
+    uint64_t hi;
+    uint64_t lo;
+};
+
 char addr_str[INET6_ADDRSTRLEN];
 
-int Flag_IPV4; /* -4 */
-int Flag_IPV6; /* -6 */
+int Flag_IPV4;    /* -4 */
+int Flag_IPV6;    /* -6 */
+int Flag_Nolocal; /* -L */
 
 int Gni_Flags = NI_NUMERICHOST; /* no lookup, unless -R */
 
@@ -30,16 +38,15 @@ int main(int argc, char *argv[]) {
     if (pledge("dns stdio", NULL) == -1) err(1, "pledge failed");
 #endif
 
-    while ((ch = getopt(argc, argv, "h?46R")) != -1) {
+    while ((ch = getopt(argc, argv, "h?46LR")) != -1) {
         switch (ch) {
         case '4': Flag_IPV4 = 1; break;
         case '6': Flag_IPV6 = 1; break;
+        case 'L': Flag_Nolocal = 1; break;
         case 'R': Gni_Flags = 0; break;
         case 'h':
         case '?':
-        default:
-            emit_usage();
-            /* NOTREACHED */
+        default: emit_usage();
         }
     }
     argc -= optind;
@@ -67,9 +74,36 @@ int main(int argc, char *argv[]) {
         }
         int family = addr->ifa_addr->sa_family;
         if (family == AF_INET && Flag_IPV4) {
+            if (Flag_Nolocal) {
+                uint32_t v4addr =
+                    ((struct sockaddr_in *) addr->ifa_addr)->sin_addr.s_addr;
+                // TODO may also want to exclude 169.254.0.0/16 and
+                // other such "Special-Use IPv4 Addresses"
+                if ((v4addr & 0xFF) == 127) {
+                    addr = addr->ifa_next;
+                    continue;
+                }
+            }
             count++;
             print_addr(addr, sizeof(struct sockaddr_in), interface);
         } else if (family == AF_INET6 && Flag_IPV6) {
+            if (Flag_Nolocal) {
+                // KLUGE better way to do this?
+                u_int8_t *v6addr =
+                    ((struct sockaddr_in6 *) addr->ifa_addr)->sin6_addr.s6_addr;
+                struct v6hilo *foo = (struct v6hilo *) v6addr;
+                // ::1
+                if (foo->hi == 0 && foo->lo == 0x100000000000000) {
+                    addr = addr->ifa_next;
+                    continue;
+                }
+                // fe80::/10
+                if (v6addr[0] == 0xFE && (v6addr[1] >> 6) == 2) {
+                    addr = addr->ifa_next;
+                    continue;
+                }
+                // TODO any other special use v6 to worry about?
+            }
             count++;
             print_addr(addr, sizeof(struct sockaddr_in6), interface);
         }
@@ -81,7 +115,7 @@ int main(int argc, char *argv[]) {
 }
 
 void emit_usage(void) {
-    fputs("Usage: localaddr [-4] [-6] [-R] [interface-name]\n", stderr);
+    fputs("Usage: localaddr [-4] [-6] [-L] [-R] [interface-name]\n", stderr);
     exit(EX_USAGE);
 }
 

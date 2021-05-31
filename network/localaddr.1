@@ -1,4 +1,4 @@
-.Dd August 30 2020
+.Dd May 31 2021
 .Dt LOCALADDR 1
 .nh
 .Os
@@ -8,7 +8,7 @@
 .Sh SYNOPSIS
 .Bk -words
 .Nm
-.Op Fl 46R
+.Op Fl 46LR
 .Op Ar interface-name
 .Ek
 .Sh DESCRIPTION
@@ -25,6 +25,9 @@ Options:
 only show IPv4 addresses.
 .It Fl 6
 only show IPv6 addresses. The default is to show both.
+.It Fl L
+do not show "local" addresses. This includes 127.0.0.0/8, ::1, and
+fe80::/10 and may be extended to include other addresses.
 .It Fl R
 perform a lookup on the addresses, if possible. Default is to show the
 numeric form.

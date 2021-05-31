@@ -27,6 +27,10 @@ $cmd->run(
     stdout => ["127.0.0.1"]
 );
 
+# may fail if non-local addresses have been assigned to loopback (??)
+$cmd->run( args => "-L -4 $lo0", stdout => [], status => 2 );
+$cmd->run( args => "-L -6 $lo0", stdout => [], status => 2 );
+
 # who knows what the DNS setup is like
 $o = $cmd->run(
     args   => "-4 -R $lo0",
@@ -40,7 +44,7 @@ $cmd->run(
     status => 2
 );
 
-$cmd->run(args => 'too many args', status => 64, stderr => qr/Usage/);
-$cmd->run(args => '-h',            status => 64, stderr => qr/Usage/);
+$cmd->run( args => 'too many args', status => 64, stderr => qr/Usage/ );
+$cmd->run( args => '-h',            status => 64, stderr => qr/Usage/ );
 
-done_testing 21
+done_testing 27

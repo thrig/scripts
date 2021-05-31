@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+# brogue - start a game of brogue
+
+# already running? don't start another
+xdotool search --name Brogue windowactivate && exit 0
+
+# TODO install it somewhere; for now run it out of the build dir
+cd TODOFIXME/BrogueCE/bin || exit 1
+
+# ain't built (it may need to be patched to remove mouse support and to
+# disable the screen gnat)
+[ -f brogue ] || gmake -C ..
+# whoops failed to build
+[ -f brogue ] || exit 1
+
+# send custom args direct to brogue
+[ $# -gt 0 ] && exec ./brogue "$@"
+
+brun() {
+   exec solitary . ./brogue --size 7 "$@"
+}
+
+# existing save? load the most recent
+savefile=$(glf '\.broguesave$')
+[ -n "$savefile" ] && brun -o "$savefile"
+
+seed=`date +%Y%m%d`
+# new game with random seed if already played the daily
+[ -e ~/tmp/brogue."$seed" ] && brun -n
+
+touch ~/tmp/brogue."$seed"
+brun -s "$seed"
