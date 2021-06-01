@@ -1,0 +1,69 @@
+#!/usr/bin/env perl
+#
+# bdf2bitmap - extract a character from a BDF file (of the form seen in
+# "UW ttyp0, Version 1.3") and convert said character to bitmap(1) form
+
+use 5.28.0;
+use warnings;
+use Text::Wrap 'wrap';
+
+my $char = shift // die "Usage: bdf2bitmap char-name [file|-]\n";
+shift if $ARGV[0] eq '-';
+
+my @chars;
+
+my $found_char = 0;
+my $in_char    = 0;
+
+my $width  = 0;
+my $height = 0;
+
+while (readline) {
+    if ($found_char) {
+        if ($in_char) {
+            if (m/^[[:xdigit:]]{1,2}$/) {
+                chomp;
+                push @chars, '0x' . $_;
+                next;
+            } elsif (m/^ENDCHAR/) {
+                emit();
+                exit;
+            } else {
+                die "unknown line $ARGV:$.:$_\n";
+            }
+        }
+        if (m/^(?a)BBX (\d+) (\d+)/) {
+            ( $width, $height ) = ( $1, $2 );
+            next;
+        }
+        if (m/^BITMAP/) {
+            die "already in BITMAP ??\n" if $in_char;
+            $in_char = 1;
+            next;
+        }
+    }
+    if (m/^STARTCHAR \Q$char/) {
+        die "already found $char ??\n" if $found_char;
+        $found_char = 1;
+        next;
+    }
+}
+die "$char not found\n";
+
+sub emit {
+    my $bad = 0;
+    if     ( $width == 0 )  { warn 'could not parse width';      $bad = 1 }
+    if     ( $height == 0 ) { warn 'could not parse height';     $bad = 1 }
+    unless (@chars)         { warn 'could not parse characters'; $bad = 1 }
+    exit 1 if $bad;
+
+    my $chlist = wrap( '    ', '    ', join ', ', @chars );
+
+    say <<"EOF";
+#define char_width $width
+#define char_height $height
+static unsigned char  char_bits[] = {
+$chlist
+};
+EOF
+}

@@ -15,11 +15,6 @@
 #include <sysexits.h>
 #include <unistd.h>
 
-struct v6hilo {
-    uint64_t hi;
-    uint64_t lo;
-};
-
 char addr_str[INET6_ADDRSTRLEN];
 
 int Flag_IPV4;    /* -4 */
@@ -75,30 +70,24 @@ int main(int argc, char *argv[]) {
         int family = addr->ifa_addr->sa_family;
         if (family == AF_INET && Flag_IPV4) {
             if (Flag_Nolocal) {
-                uint32_t v4addr =
-                    ((struct sockaddr_in *) addr->ifa_addr)->sin_addr.s_addr;
-                // TODO may also want to exclude 169.254.0.0/16 and
-                // other such "Special-Use IPv4 Addresses"
-                if ((v4addr & 0xFF) == 127) {
+                uint32_t v4addr = ntohl(
+                    ((struct sockaddr_in *) addr->ifa_addr)->sin_addr.s_addr);
+                if (((v4addr >> 24) & 0xFF) == 127) {
                     addr = addr->ifa_next;
                     continue;
                 }
+                // TODO may also want to exclude 169.254.0.0/16 and
+                // other such "Special-Use IPv4 Addresses"
             }
             count++;
             print_addr(addr, sizeof(struct sockaddr_in), interface);
         } else if (family == AF_INET6 && Flag_IPV6) {
             if (Flag_Nolocal) {
-                // KLUGE better way to do this?
-                u_int8_t *v6addr =
-                    ((struct sockaddr_in6 *) addr->ifa_addr)->sin6_addr.s6_addr;
-                struct v6hilo *foo = (struct v6hilo *) v6addr;
-                // ::1
-                if (foo->hi == 0 && foo->lo == 0x100000000000000) {
-                    addr = addr->ifa_next;
-                    continue;
-                }
-                // fe80::/10
-                if (v6addr[0] == 0xFE && (v6addr[1] >> 6) == 2) {
+                struct in6_addr *v6addr =
+                    &((struct sockaddr_in6 *) addr->ifa_addr)->sin6_addr;
+                // ::1, fe80::/10
+                if (IN6_IS_ADDR_LOOPBACK(v6addr) ||
+                    IN6_IS_ADDR_LINKLOCAL(v6addr)) {
                     addr = addr->ifa_next;
                     continue;
                 }
