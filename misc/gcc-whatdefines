@@ -1,3 +1,3 @@
 #!/bin/sh
-# what defines are set? (CC=clang ... also gives results, at least)
-echo '#include <stdio.h>' | "${CC:-gcc}" -dD -E -
+# what defines are set?
+"${CC:-cc}" -dM -E - < /dev/null
