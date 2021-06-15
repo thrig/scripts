@@ -1,23 +1,35 @@
-#!/usr/bin/env expect
+#!/usr/bin/env tclsh8.6
 #
-# playit - lilypond some.ly, view PDF, play MIDI
+# playit - lilypond some.ly, view PDF, play MIDI. usually as:
+#
+#   aslines foo.ly | entr -c playit foo.ly
 
 if {[llength $argv] != 1} {
     puts stderr "Usage: playit lilypond-file.ly"
     exit 1
 }
-set ly [lindex $argv 0]
-set bn [regsub {\.ly$} $ly ""]
+set lyfile [lindex $argv 0]
+set lyroot [file rootname $lyfile]
 
-exec lilypond -dno-point-and-click --silent -o $bn --pdf $ly
-exec mopen $bn.pdf &
+# lilypond may sporadically fail with some "crossed fingers" error,
+# automatically re-run in such a case
+fconfigure stdout -buffering none
+puts -nonewline building...
+set okay 0
+set retries 3
+while {$retries > 0} {
+    set out [exec -ignorestderr lilypond -dno-point-and-click --silent -o $lyroot --pdf $lyfile 2>@1]
+    if {![regexp Cross $out]} { set okay 1;break }
+    puts $out
+    #puts -nonewline ...
+    incr retries -1
+}
+if {!$okay} { puts $out;exit 1 }
 
-if {![catch "exec is-mute"]} { exit 0 }
+exec mopen $lyroot.pdf &
 
-# https://github.com/thrig/realexec
-set auto_path [linsert $auto_path 0 ~/lib/tcl]
-package require realexec
-
-#set preset "D4 Jazz AB"
-#real_exec pianoteq --play-and-quit --headless --preset $preset --midi $bn.midi
-real_exec tlymidity $bn.midi
+if {[catch "exec is-mute"]} {
+    puts -nonewline playing...
+    exec tlymidity $lyroot.midi
+}
+puts ok
