@@ -13,6 +13,7 @@ requires 'File::Cmp';
 requires 'File::HomeDir';
 requires 'File::Path';
 requires 'File::Path::Tiny';
+requires 'File::ReadBackwards';
 requires 'File::Slurper';
 requires 'File::Spec';
 requires 'File::Tail';

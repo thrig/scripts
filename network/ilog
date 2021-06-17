@@ -1,6 +1,7 @@
 #!/usr/bin/env perl
 #
-# ilog - get URL(s) from the irssi logs, or some file, e.g.
+# ilog - prints the most recent URL or all URLs from an irssi log file
+# or some file.
 #
 #   # view what is probably a screencapture of someone having used a
 #   # mininuke to clear some bugs off a road (or similar hilarity)
@@ -17,55 +18,74 @@
 
 use 5.28.0;
 use warnings;
-use File::Spec::Functions qw(catfile);
+use File::ReadBackwards;
 use Getopt::Long qw(GetOptions);
 use POSIX qw(mktime strftime);
 use URL::Search qw($URL_SEARCH_RE);
 
-my $Flag_Channel  = '#perl';
-my $Flag_Encoding = ':encoding(UTF-8)';
+my $Flag_Channel = '#perl';
 
 Getopt::Long::Configure('bundling');
 GetOptions(
     'all|a'       => \my $Flag_Showall,
     'channel|c=s' => \$Flag_Channel,
-    'encoding|e'  => \$Flag_Encoding,
     'help|h|?'    => \&emit_help,
 ) or exit 65;
 
 my $search_re = shift // qr/^/;
 my $file      = shift;
 my $fh;
+my $forwards;
 if ( defined $file ) {
     if ( $file eq '-' ) {
-        $fh = \*STDIN;
-    } else {
-        open $fh, '<', $file or die "could not open '$file': $!\n";
+        $fh       = \*STDIN;
+        $forwards = 1;
     }
 } else {
-    $fh = most_recent_logfile();
+    $file = most_recent_logfile();
 }
+unless ( defined $forwards ) {
+    if ($Flag_Showall) {
+        open $fh, '<', $file or die "ilog: could not open '$file': $!\n";
+        $forwards = 1;
+    }
+}
+binmode *STDOUT, ':encoding(UTF-8)';
 
-binmode $fh,     $Flag_Encoding;
-binmode *STDOUT, $Flag_Encoding;
-
-# TODO there is File::ReadBackwards (or something like that) but I
-# forgot to install that module while I was online. might be more
-# efficient for showing only the last URL in a big file
-my $last;
-while ( my $line = readline $fh ) {
-    while ( $line =~ m/($URL_SEARCH_RE)/g ) {
-        my $url = $1;
-        if ( $url =~ m/$search_re/ ) {
-            if ($Flag_Showall) {
-                say $url;
-            } else {
-                $last = $url;
+if ($forwards) {
+    binmode $fh, ':encoding(UTF-8)';
+    my $final_url;
+    while ( my $line = readline $fh ) {
+        while ( $line =~ m/($URL_SEARCH_RE)/g ) {
+            my $url = $1;
+            if ( $url =~ m/$search_re/ ) {
+                if ($Flag_Showall) {
+                    say $url;
+                } else {
+                    $final_url = $url;
+                }
             }
         }
     }
+    say $final_url if defined $final_url;
+} else {
+    tie *STDIN, 'File::ReadBackwards', $file
+      or die "ilog: could not tie '$file': $!\n";
+    while ( readline *STDIN ) {
+        utf8::decode( my $line = $_ );
+        my $final_url;
+        while ( $line =~ m/($URL_SEARCH_RE)/g ) {
+            my $url = $1;
+            if ( $url =~ m/$search_re/ ) {
+                $final_url = $url;
+            }
+        }
+        if ( defined $final_url ) {
+            say $final_url;
+            last;
+        }
+    }
 }
-say $last if defined $last;
 
 sub emit_help {
     warn <<"END_USAGE";
@@ -75,7 +95,6 @@ Options include:
 
     -a        Show all (matching) URL (default select regex: qr/^/)
     -c chan   Search specified channel (default: perl)
-    -e enc    Specify input (and output) encoding to use (default: UTF-8)
 
 END_USAGE
     exit 64;
@@ -104,17 +123,16 @@ sub most_recent_logfile {
     }
     $file .= '.log';
 
-    my $fh;
     my $logfile;
     for my $month ( recent_months('%Y-%m') ) {
-        $logfile = catfile( $Dir_Path, $month, $file );
-        open( $fh, '<', $logfile ) or next;
-        return $fh;
+        $logfile = join( '/', $Dir_Path, $month, $file );
+        return $logfile if -r $logfile;
     }
-    die "ilog: could not open '$logfile': $!\n";
+    die "ilog: could not read '$logfile': $!\n";
 }
 
-# only this or the previous month, given the ~3day retention on IRC logs
+# only this or the previous month, given the ~3day retention on active
+# IRC logs
 sub recent_months {
     my ($tmpl) = @_;
     my @values;

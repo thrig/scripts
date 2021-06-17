@@ -1,1 +1,3 @@
 requires 'ExtUtils::Embed';
+requires 'File::ReadBackwards';
+requires 'URL::Search';
