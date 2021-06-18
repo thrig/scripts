@@ -1,2 +1,12 @@
 #!/bin/sh
-exec sndioctl output.mute=!
+
+# do not mute while snoozing, which is most often a timer for the tea.
+# on the other hand, I sometimes mute the system while fiddling around
+# with music (see `playit`). these tasks conflict with one another
+pgrep -f snooze || exec sndioctl output.mute=!
+
+echo >&2 "not whilst snoozing"
+if [ x"`sndioctl output.mute`" == xoutput.mute=1 ]; then
+   echo >&2 "disabling mute whilst snoozing"
+   exec sndioctl output.mute=0
+fi

@@ -1,4 +1,4 @@
-.Dd November 22 2017
+.Dd June 17 2021
 .Dt PLAYIT 1
 .nh
 .Os
@@ -8,94 +8,35 @@
 .Sh SYNOPSIS
 .Bk -words
 .Nm
-.Op Ar lilypond-file
-.Op Qq nopager
+.Ar lilypond-file
 .Ek
 .Sh DESCRIPTION
 .Nm
-if necessary runs
+runs
 .Xr lilypond 1
 on the provided
 .Ar lilypond-file ,
-opens the resulting PDF with a PDF viewer, and plays the resulting MIDI
-file.
-.Pp
-If no
-.Ar lilypond-file
-is given, the mostly recently modified
-.Pa *.ly
-file is searched for in the current working directory (with exceptions).
-.Pp
-With a
-.Ar lilypond-file
-argument, an optional second argument if it contains
-.Qq nopager
-then should
-.Xr lilypond 1
-fail the
-.Dv PAGER
-will not be used to display the
-.Xr lilypond 1
-build log, and that log will instead be written to standard out.
-.Pp
-While the MIDI player is playing, "any key" can be used to stop
-the playback. This will cause
-.Nm
-to exit.
-.Sh ENVIRONMENT
-.Dv PAGER
-specifies what pager to use, if necessary.
-.Sh FILES
-The
-.Pa ~/.playitrc
-file can be used to override the
-.Xr lilypond 1
-command used, the command for the PDF viewer, and the MIDI player
-command, e.g.
-.Pp
-.Dl puts \&"midi_cmd set to pianoteq via [info script]\&"
-.Dl set midi_cmd {pianoteq --midi}
-.Pp
-This file may also be used to write a custom
-.Dv maybe_latest
-TCL procedure, should the provided one not be ideal (on account of the
-exceptions alluded to, above). See the source code for details.
+opens the resulting PDF, and plays the resulting MIDI file (unless the
+system is mute).
 .Sh EXIT STATUS
 .Ex -std
-However, errors are not much checked for once the MIDI player starts.
 .Sh EXAMPLES
-Two methods for using
+Usually
 .Nm
-from
-.Xr vim 1
-include running
-.Nm
-with the filename of the buffer, or via the
-.Cm make
-command. This allows either
-.Ic backslash-t
-to build, play, and show any errors, or
-.Ic backslash-m
-and then
-.Ic backslash-c
-to use the
-.Xr vim 1
-.Cm make
-system to review errors, if any.
+is run something along the lines of
 .Pp
-.Dl map <Leader>t :update<CR>:!playit %<CR><CR>
+.Dl $ Ic aslines foo.ly \&| entr -c playit foo.ly
 .Pp
-.Dl setlocal makeprg=playit\ %\ nopager
-.Dl map <Leader>m :update<CR>:make<CR>
-.Dl map <Leader>c :cnext<CR>
+which might be abstracted to something like
 .Pp
+.Dl #!/bin/sh
+.Dl aslines \&"$@\&" \&| entr -c playit \&"$1\&"
+.Pp
+should multiple files be involved.
 .Sh SEE ALSO
-.Xr Tcl n ,
 .Xr lilypond 1 ,
 .Xr midiutil 1 ,
 .Xr mopen 1 ,
-.Xr tlymidity 1 ,
-.Xr vim 1 ,
-.Xr waitornot 1
+.Xr tlymidity 1
 .Sh AUTHOR
 .An Jeremy Mates
