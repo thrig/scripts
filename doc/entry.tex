@@ -1,0 +1,608 @@
+\documentclass[10pt,a4paper]{article}
+\setlength{\topmargin}{-5mm}
+\setlength{\textheight}{244mm}
+\setlength{\oddsidemargin}{0mm}
+\setlength{\textwidth}{165mm}
+
+\setlength{\parindent}{0pt}
+
+\usepackage{fancyvrb}
+\DefineVerbatimEnvironment{verbatim}{Verbatim}{xleftmargin=4mm}
+
+\usepackage{lmodern}
+\usepackage[T1]{fontenc}
+\usepackage{pxfonts}
+\usepackage{textcomp}
+
+\usepackage[square]{natbib}
+\citestyle{nature}
+
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily,
+escapeinside={||}}
+
+\frenchspacing
+
+\title{Entry}
+\author{Jeremy Mates}
+\date{June 26, 2021}
+
+\usepackage{hyperref}
+\hypersetup{pdfauthor={Jeremy Mates},pdftitle={Entry}}
+
+\begin{document}
+\renewcommand{\thefootnote}{\alph{footnote}}
+\bibliographystyle{plainnat}
+\maketitle
+
+\begin{lstlisting}
+$ |\textbf{FOO=a ruby \symbol{45}e 'puts ENV\symbol{91}"FOO"\symbol{93}, ARGV' b c}|
+a
+b
+c
+\end{lstlisting}
+
+An important difference between the arguments list--\texttt{b} and
+\texttt{c} to the ruby script, or a longer list at the \texttt{exec}
+level--and the environment list--\texttt{FOO=a} and various unseen
+others--is that environment variables are inherited by child processes.
+This means placing a password or other secret data in an environment
+variable may be a poor practice. Environment variables can be difficult
+to whitelist, see \texttt{sudo} or \texttt{doas} for example code. \\
+
+Use the \texttt{env(1)} command to inspect what environment variables
+are set, or language-specific features to view what is often the same
+list. Here are some different ways of doing the same thing.
+
+\begin{lstlisting}
+$ |\textbf{export FOO=zot}|
+$ |\textbf{expect \symbol{45}c 'puts \symbol{36}env(FOO); puts \symbol{91}exec env \symbol{124} grep FOO\symbol{93}'}|
+zot
+FOO=zot
+$ |\textbf{perl \symbol{45}E 'say \symbol{36}ENV\symbol{123}FOO\symbol{125}; exec "env"' \symbol{124} grep zot}|
+zot
+FOO=zot
+$ |\textbf{ruby \symbol{45}e 'puts ENV\symbol{91}"FOO"\symbol{93}; exec "env"' \symbol{124} grep zot}|
+FOO=zot
+\end{lstlisting}
+
+Note that the \texttt{expect} (TCL) \texttt{exec} is nothing like the OS
+\texttt{execv(3)} system call or the Perl or Ruby \texttt{exec}
+functions; the TCL \texttt{exec} is actually what is usually called
+\texttt{system(3)}. \texttt{system(3)} runs a shell command while the
+\texttt{execv(3)} replaces the current process with something else.
+Which to use depends on the language, and whether you want the original
+process to hang around afterwards. \texttt{system(3)} is often exploited
+if an attacker can pass in arbitrary shell code, somehow. \\
+
+\texttt{ruby} needs a \texttt{STDOUT.flush} call to behave like the
+other processes; this is a buffering issue.
+
+\begin{lstlisting}
+$ |\textbf{ruby \symbol{45}e 'puts ENV\symbol{91}"FOO"\symbol{93}; STDOUT.flush; exec "env"' \symbol{124} grep zot}|
+zot
+FOO=zot
+\end{lstlisting}
+
+On linux, the \texttt{/proc/.../environ} file is another way to inspect
+the environment of a process.
+
+\begin{lstlisting}
+# |\textbf{cd /proc/\symbol{36}\symbol{36}}|
+# |\textbf{cat environ}|
+USER=rootLOGNAME=rootHOME=/rootPATH=/usr/local/sbin:/us...
+\end{lstlisting}
+
+If the output is a mess, run it through a hex
+viewer--\texttt{hexdump(1)}, \texttt{od(1)} or with \texttt{vim}
+installed \texttt{xxd}--to see what is going on. This may reveal
+characters such as
+
+\begin{lstlisting}
+# |\textbf{hexdump \symbol{45}C environ \symbol{124} head \symbol{45}1}|
+00000000  55 53 45 52 3d 72 6f 6f  74 00 4c 4f ...
+\end{lstlisting}
+
+\texttt{nul} as shown by the hex code \texttt{00}. Now is a good time to
+mention \texttt{ascii(7)} which contains a handy chart of the ASCII
+characters; Unicode or other not-ASCII encodings can (sometimes) be
+identified by hex values north of \texttt{7F} and may need
+encoding-aware tools to better display and debug them. The
+\texttt{tr(1)} command should suffice to improve \texttt{environ} for
+human consumption; map the \texttt{NUL} values to newlines:
+
+\begin{lstlisting}
+# |\textbf{tr '\symbol{92}0' '\symbol{92}n' < environ}|
+...
+\end{lstlisting}
+
+Various invisible characters--or Unicode characters that appear to be
+similar to an ASCII hyphen but are not--can also be problematic. A hex
+viewer should reveal their presence. The font will also influence how
+similar different characters appear to be. Even worse, terminals or
+operating systems may normalize characters run through copy and paste,
+or a document may contain something besides the indicated character. All
+this can complicate debugging.
+
+\begin{lstlisting}
+$ |\textbf{ls --al}|
+|ls: --al: No such file or directory|
+$ |\textbf{echo 'ls --al' \symbol{124} hexdump}|
+00000000 6c 73 20 e2 80 93 61 6c 0a
+\end{lstlisting}
+
+Here the \texttt{e2 80 93} between the space \texttt{20} and the
+letter a \texttt{61} represent the Unicode character 'EN DASH'
+\texttt{U+2013} in UTF-8. \\
+
+When something weird happens, run the data through a hex viewer, or use
+a process tracing tool such as \texttt{strace}. \texttt{strace} will
+reveal the exact argument list used and may help diagnose how an unknown
+ball of code is calling external programs. This usually boils down to
+some \texttt{exec} call, though there may also be calls to \texttt{sh}
+involved, depending on the input.
+
+\begin{lstlisting}
+$ |\textbf{strace \symbol{45}f  \symbol{45}o eg1 ruby \symbol{45}e '`echo easygrep`'}|
+$ |\textbf{strace \symbol{45}f  \symbol{45}o eg2 ruby \symbol{45}e '`echo easygrep\symbol{38}`'}|
+$ |\textbf{grep easygrep eg* \symbol{124} grep execve \symbol{124} grep \symbol{45}v ruby}|
+|eg1:4186 execve("/usr/bin/echo", \symbol{91}"echo", "easygrep"\symbol{93} ...|
+|eg2:4206 execve("/bin/sh", \symbol{91}"sh", "\symbol{45}c", "echo easygrep\symbol{38}"\symbol{93} ...|
+\end{lstlisting}
+
+With a single character change \texttt{ruby} switches from performing a
+direct exec of \texttt{echo} to wrapping the command in a shell call.
+This may be good to know if one had assumed the command was always run
+under the shell, or the other way around, and one or the other methods
+is broken for some reason. There can also be security implications.
+
+\section*{On the Ordering of Arguments}
+
+Another complication with arguments is that programs may support
+subcommands where the arguments for one level of the command probably
+should not be mixed with those of the subcommand; other programs such as
+\texttt{find(1)} or \texttt{pw} on FreeBSD may require that various
+arguments appear in specific ways;
+
+\begin{lstlisting}
+# wrong!
+|find \symbol{45}name "foo*" /etc|
+
+# correct
+|find /etc \symbol{45}name "foo*"|
+
+# same -C, different meanings
+|git \symbol{45}C <path> commit \symbol{45}C <commit> ...|
+\end{lstlisting}
+
+this is in contrast to other commands where the options can actually
+appear after other arguments. Such usages may be frowned on, or
+unportable.
+
+\begin{lstlisting}
+# atypical
+$ |\textbf{grep root /etc \symbol{45}r}|
+...
+
+# more common
+$ |\textbf{grep -r root /etc}|
+...
+
+# disable option processing, see getopt(3)
+$ |\textbf{grep \symbol{45}r \symbol{45}\symbol{45} "\symbol{36}pattern" /etc}|
+...
+\end{lstlisting}
+
+In general the manual page must be studied to see which inputs and in
+what order are supported; keep in mind that there are various historical
+warts, \texttt{find(1)} and especially \texttt{dd(1)} that use distinct
+grammars or otherwise do not fit the mold of more common programs. \\
+
+Now let us take a closer look at environment variables, and how to
+
+\section*{Duplicate Environment Variables}
+
+\ldots but aren't environment variables stored in some sort of hash or
+associative array, which cannot by definition have duplicate keys?
+Yes. In some languages. Which are abstractions on top of what is
+actually a list, and lists may contain duplicate entries. Also there's
+literally nothing that distinguishes command line arguments from the
+environment variables. Some assembly and the judicious use of a
+debugger may help clear up this fog, or at least exchange the fog for
+the deep end of the pool.
+
+\lstinputlisting{code/envandargs.asm}
+
+This is NASM format assembly for an amd64 Linux system that does little
+more than pop 64-bit values off the stack into a register. This is only
+useful under a debugger. With this file saved as \texttt{envandargs.asm}
+the assembly, linking, and launching it under a debugger may run
+something like
+
+\begin{lstlisting}
+$ |\textbf{nasm \symbol{45}f elf64 \symbol{45}g \symbol{45}F dwarf \symbol{45}o envandargs.o envandargs.asm}|
+$ |\textbf{ld \symbol{45}o envandargs envandargs.o}|
+$ |\textbf{gdb envandargs}|
+...
+\end{lstlisting}
+
+Then, in \texttt{gdb}, we keep track of the \texttt{RCX} register:
+
+\begin{lstlisting}
+|(gdb) \textbf{set args a bb ccc}|
+|(gdb) \textbf{display /x \symbol{36}rcx}|
+|(gdb) \textbf{break \symbol{95}start}|
+|Breakpoint 1 at 0x400080: file envandargs.asm, line 6.|
+|(gdb) \textbf{run}|
+|Starting program: /home/jmates/envandargs a bb ccc|
+
+|Breakpoint 1, \symbol{95}start () at envandargs.asm:6|
+|6 \ \ \ \ \ \ \symbol{95}start: mov rbp,rsp \ \ \ \ ; save pointer to stack pointer|
+|1: /x \symbol{36}rcx = 0x0|
+|(gdb) \textbf{next}|
+|7 \ \ \ \ \ \ \ \ \ \ \ \ \ \ pop rcx \ \ \ \ \ \ \ \ ; get argument count off stack|
+|1: /x \symbol{36}rcx = 0x0|
+|(gdb) \textbf{next}|
+|\symbol{95}nexta () at envandargs.asm:9|
+|9 \ \ \ \ \ \ \symbol{95}nexta: pop rcx \ \ \ \ \ \ \ \ ; loop popping off arg pointers|
+|1: /x \symbol{36}rcx = 0x4|
+|(gdb)|
+\end{lstlisting}
+
+One confusion with \texttt{gdb} is that it shows the line of code it is
+about to run, not what it just executed. \\
+
+The \texttt{pop rcx} has placed \texttt{4} into the \texttt{RCX}
+register; this is the argument count, or what would be available in
+\texttt{int main (int argc, ...} in a C program. The argument count
+includes the program name plus here the arguments \texttt{a},
+\texttt{bb}, and \texttt{ccc}.
+
+\begin{lstlisting}
+|(gdb) \textbf{next}|
+|\symbol{95}nexta () at envandargs.asm:10|
+|10 \ \ \ \ \ \ \ \ \ \ \ \ \ cmp rcx,0 \ \ \ \ \ \ ; ... until 64\symbol{45}bit 0 value|
+|1: /x \symbol{36}rcx = 0x7fffffffeef2|
+|(gdb)|
+\end{lstlisting}
+
+\texttt{RCX} should now contain the address of the first argument; let's
+inspect that, looking for a \texttt{s} string value--a list of
+not-\texttt{nul} characters followed by a \texttt{nul} character.
+Actually let's cheat and peek at several string values\ldots
+
+\begin{lstlisting}
+|(gdb) \textbf{x /s 0x7fffffffeef2}|
+|0x7fffffffeef2: "/home/jmates/envandargs"|
+|(gdb) \textbf{x /5s 0x7fffffffeef2}|
+|0x7fffffffeef2: "/home/jmates/envandargs"|
+|0x7fffffffef0a: "a"|
+|0x7fffffffef0c: "bb"|
+|0x7fffffffef0f: "ccc"|
+|0x7fffffffef13: "USER=jmates"|
+|(gdb)|
+\end{lstlisting}
+
+These are the arguments directly followed by the environment variables.
+Let's step back and take a look at the stack. The original stack pointer
+was saved into the \texttt{RBP} register as the very first instruction.
+Since this is a 64-bit system, we'll look at ten of what \texttt{gdb}
+calls \texttt{g}iant or eight byte chunks:
+
+\begin{lstlisting}
+|(gdb) \textbf{x /10xg \symbol{36}rbp}|
+|0x7fffffffed20: 0x0000000000000004 0x00007fffffffeef2|
+|0x7fffffffed30: 0x00007fffffffef0a 0x00007fffffffef0c|
+|0x7fffffffed40: 0x00007fffffffef0f 0x0000000000000000|
+|0x7fffffffed50: 0x00007fffffffef13 0x00007fffffffef1f|
+|0x7fffffffed60: 0x00007fffffffef2a 0x00007fffffffef92|
+|(gdb)|
+\end{lstlisting}
+
+There's the argument count \texttt{4} followed by the four addresses
+that point to the values of those four arguments, then the zero value
+that divides the arguments from the environment--the "nothing" I spoke
+of earlier--and then some of the addresses of the environment variables.
+\texttt{gdb} can also shell out to hex viewers; this is another way to
+show the contents of the arguments:
+
+\begin{lstlisting}
+|(gdb) \textbf{dump binary memory ddd 0x00007fffffffeef2 0x00007fffffffef1f}|
+|(gdb) \textbf{shell xxd ddd}|
+|...|
+|(gdb) \textbf{quit}|
+\end{lstlisting}
+
+All very fascinating. Though, how can we add a duplicate environment
+variable into the environment list?
+
+\subsection*{High Level Language}
+
+C, a high level language,\footnote{This term is relative.} uses the
+exact same stack of values as the assembly only with handy names
+attached to these addresses, plus a bunch of additional
+cruft.\footnote{Ease and additional cruft are hallmarks of high level
+languages.} Here is the file \texttt{envdup.c}.
+
+\lstinputlisting{code/envdup.c}
+
+This is similar to the shell script
+
+\begin{lstlisting}
+|\symbol{35}!/bin/sh|
+|FOO=one FOO=two exec "\symbol{36}@"|
+\end{lstlisting}
+
+only that the shell does not let you create duplicate environment
+variables.
+
+\begin{lstlisting}
+$ |\textbf{FOO=one FOO=two env \symbol{124} grep FOO}|
+|FOO=two|
+$ |\textbf{CFLAGS=\symbol{45}g make envdup}|
+|cc \symbol{45}g envdup.c \symbol{45}o envdup|
+$ |\textbf{gdb ./envdup}|
+|...|
+\end{lstlisting}
+
+Let us first poke around in the debugger and inspect what C calls
+\texttt{argv}.
+
+\begin{lstlisting}
+|(gdb) \textbf{set args a bb ccc}|
+|(gdb) \textbf{break main}|
+|Breakpoint 1 at 0x100000db6: file envdup.c, line 10.|
+|(gdb) \textbf{run}|
+|...|
+|Breakpoint 1, main (argc=4, argv=0x7fff5fbff648) at envdup.c:10|
+|10 \ \ \ \ \ \ \ \ \ \ \ int envcount = 0;|
+|(gdb) \textbf{x /10xg 0x7fff5fbff648}|
+|0x7fff5fbff648: 0x00007fff5fbff840 0x00007fff5fbff859|
+|0x7fff5fbff658: 0x00007fff5fbff85b 0x00007fff5fbff85e|
+|0x7fff5fbff668: 0x0000000000000000 0x00007fff5fbff862|
+|0x7fff5fbff678: 0x00007fff5fbff87d 0x00007fff5fbff888|
+|0x7fff5fbff688: 0x00007fff5fbff891 0x00007fff5fbff8cc|
+|(gdb) \textbf{x /5s 0x00007fff5fbff840}|
+|0x7fff5fbff840: "/Users/jmates/tmp/envdup"|
+|0x7fff5fbff859: "a"|
+|0x7fff5fbff85b: "bb"|
+|0x7fff5fbff85e: "ccc"|
+|0x7fff5fbff862: "\symbol{95}=/Users/jmates/tmp/envdup"|
+|(gdb) \textbf{quit}|
+|...|
+\end{lstlisting}
+
+Exactly like the assembly code, and even the same format on both
+Linux assembly and here C code being run on Mac OS X. Now to run the
+program proper:
+
+\begin{lstlisting}
+|\symbol{36} \textbf{unset FOO}|
+|\symbol{36} \textbf{./envdup env \symbol{124} grep FOO}|
+|FOO=one|
+|FOO=two|
+\end{lstlisting}
+
+Duplicate environment entries for \texttt{FOO} have been set, as
+reported by \texttt{env(1)}. \texttt{envdup} can be used to test what
+other languages or programs do with duplicate environment entries. For
+instance, is the first or second duplicate selected?
+
+\begin{lstlisting}
+|\symbol{36} \textbf{unset FOO}|
+|\symbol{36} \textbf{./envdup bash \symbol{45}c 'echo \symbol{36}FOO; exec env' \symbol{124} egrep 'one\symbol{124}two'}|
+|two|
+|FOO=two|
+|\symbol{36} \textbf{./envdup zsh \symbol{45}c 'echo \symbol{36}FOO; exec env' \symbol{124} egrep 'one\symbol{124}two'}|
+|one|
+|FOO=one|
+\end{lstlisting}
+
+\texttt{bash} selects the last, and \texttt{zsh} the first, and the
+duplicate has been removed. What about other languages?
+
+\begin{lstlisting}
+|\symbol{36} \textbf{./envdup expect \symbol{45}c 'puts \symbol{36}env(FOO);puts \symbol{91}exec env\symbol{93}' \symbol{124} egrep 'one\symbol{124}two'}|
+|one|
+|FOO=one|
+|FOO=two|
+|\symbol{36} \textbf{./envdup perl \symbol{45}E 'say \symbol{36}ENV\symbol{123}FOO\symbol{125};exec "env"' \symbol{124} egrep 'one\symbol{124}two'}|
+|one|
+|FOO=one|
+|\symbol{36} \textbf{./envdup ruby \symbol{45}e 'puts ENV\symbol{91}"FOO"\symbol{93};STDOUT.flush;exec "env"' \symbol{124} egrep 'one\symbol{124}two'}|
+|one|
+|FOO=one|
+|FOO=two|
+\end{lstlisting}
+
+Consistent selection of the first duplicate, except that Ruby and TCL
+have not cleaned up the environment and pass the duplicates on to
+\texttt{env}. Perl instead matches \texttt{zsh} and calls \texttt{env}
+with the duplicate removed.
+
+\begin{lstlisting}
+|\symbol{36} \textbf{expect \symbol{45}v}|
+|expect version 5.45|
+|\symbol{36} \textbf{perl \symbol{45}v \symbol{124} sed \symbol{45}n 2p}|
+|This is perl 5, version 32, subversion 1 (v5.32.1) built for amd64\symbol{45}openbsd|
+|\symbol{36} \textbf{ruby \symbol{45}v}|
+|ruby 3.0.1p64 (2021\symbol{45}04\symbol{45}05 revision 0fb782ee38) \symbol{91}x86\symbol{95}64\symbol{45}openbsd\symbol{93}|
+\end{lstlisting}
+
+Duplication of environment variables is not a trivial issue; see
+\url{https://www.sudo.ws/repos/sudo/rev/d4dfb05db5d7} for the security
+patch to \texttt{sudo(8)}. In particular, if only the first environment
+variable is sanitized \texttt{bash} as shown above will use the second
+variable. This could allow an attacker to specify a custom second
+\texttt{PATH} or various \texttt{LD\symbol{95}*} environment values that
+a subsequent \texttt{bash} process would use. ``Practical UNIX \&
+Internet Security''\cite{simson1996} mentions the duplicate environment
+variable attack;
+
+\begin{quote}
+``examine the environment to be certain that there is only one instance
+of the variable: the one you set. An attacker can run your code from
+another program that creates multiple instances of an environment
+variable. Without an explicit check, you may find the first instance,
+but not the others; such a situation could result in problems later
+on.'' p.717
+\end{quote}
+
+\texttt{sudo} was patched for this two decades later. Other software
+remains completely unpatched; one idea is that perhaps libc should
+maybe somehow handle the duplicates before the program enters
+\texttt{main}? \\
+
+\url{https://sourceware.org/bugzilla/show_bug.cgi?id=19749} \\
+
+This may be difficult given the differences between \texttt{bash} and
+other software with regard to which duplicate is passed through\ldots
+what does your language do?
+
+\section*{\texttt{execv(3)} versus \texttt{system(3)}}
+
+These calls are used to execute new programs. Understanding the
+difference between \texttt{exec(3)} and \texttt{system(3)} is important
+as \texttt{system(3)} uses the shell while passing a shell command to
+\texttt{exec(3)} may not fare so well. The difference is complicated by
+languages that call \texttt{system(3)} \texttt{exec}--TCL, as noted
+above. Also, PHP. Some software make both interfaces available.
+\texttt{git(1)} in particular offers both \texttt{GIT\symbol{95}SSH} and
+\texttt{GIT\symbol{95}SSH\symbol{95}COMMAND} environment variables:
+
+\begin{lstlisting}
+| \ \ \ \ \ \ \ \symbol{36}GIT\symbol{95}SSH\symbol{95}COMMAND takes precedence over \symbol{36}GIT\symbol{95}SSH, and is interpreted|
+| \ \ \ \ \ \ \ by the shell, which allows additional arguments to be included.|
+| \ \ \ \ \ \ \ \symbol{36}GIT\symbol{95}SSH on the other hand must be just the path to a program (which|
+| \ \ \ \ \ \ \ can be a wrapper shell script, if additional arguments are needed).|
+\end{lstlisting}
+
+Less well documented programs may need a source code dive or
+\texttt{strace} to determine which is used. A shell command ``not
+working'' is a good indication that \texttt{exec(3)} is being used
+instead of \texttt{system(3)}. A minimal \texttt{exec(3)} example would
+be the following C code,
+
+\lstinputlisting{code/minexec.c}
+
+which can illustrate the ``\texttt{system} was assumed but \texttt{exec}
+used'' problem:
+
+\begin{lstlisting}
+|\symbol{36} \textbf{make minexec}|
+|gcc \ \ \ \ minexec.c \ \ \symbol{45}o minexec|
+|\symbol{36} \textbf{./minexec echo 'hi there'}|
+|hi there|
+|\symbol{36} \textbf{./minexec 'echo hi there'}|
+|minexec: exec failed: No such file or directory|
+\end{lstlisting}
+
+\texttt{strace} is most useful when a program omits details necessary to
+debug an issue; what is actually being run for the second command is the
+string \texttt{echo hi there} which typically does not exist in
+\texttt{PATH}. No shell word split is done by \texttt{execv(3)}; the
+string given as the first argument is searched for in \texttt{PATH}.
+\texttt{system(3)} by contrast will pass a string to \texttt{sh}. For a
+minimal C example the list of arguments must be converted into a single
+string, ideally with more error checking and fewer assumptions than are
+made here--this is something like \texttt{tr '\symbol{92}0' ' '} for the
+arguments list.
+
+\lstinputlisting{code/minsys.c}
+
+This code by contrast does run \texttt{'echo hi there'} without error
+
+\begin{lstlisting}
+|\symbol{36} \textbf{make minsys}|
+|cc \symbol{45}O2 \symbol{45}pipe \ \ \ \symbol{45}o minsys minsys.c|
+|\symbol{36} \textbf{./minsys 'echo hi here'}|
+|hi here|
+\end{lstlisting}
+
+as what is being run is \texttt{/bin/sh \symbol{45}c 'echo hi
+there'}--compare the programs with \texttt{strace}. Redirections and
+other shell constructs are likewise acceptable to \texttt{system}, but
+not \texttt{exec}.
+
+\section*{Maximum Arguments}
+
+There exist various limits on what a unix program will accept. These
+limits have been raised over time. The usual encounter will run
+something like
+
+\begin{lstlisting}
+|\symbol{36} \textbf{ls *}|
+\end{lstlisting}
+
+in a directory with a very large number of files, or files with very
+long names, or where many environment variables have been set; the shell
+first expands the glob, and then calls some \texttt{exec} function with
+the complete list of filenames. A typical limit is
+\texttt{ARG\symbol{95}MAX} that includes both the arguments and the
+environment list.
+
+\begin{lstlisting}
+|\symbol{36} \textbf{getconf ARG\symbol{95}MAX}|
+|2097152|
+|\symbol{36} \textbf{mkdir big \symbol{38}\symbol{38} cd big}|
+|\symbol{36} \textbf{perl \symbol{45}e '\symbol{36}n = "a"x128; \symbol{36}c = 16384;' \symbol{92}}|
+| \ \textbf{\symbol{45}e 'while (\symbol{36}c\symbol{45}\symbol{45}) \symbol{123} `touch \symbol{36}n`; \symbol{36}n++ \symbol{125}'}|
+|\symbol{36} \textbf{ls *}|
+|\symbol{45}bash: /bin/ls: Argument list too long|
+\end{lstlisting}
+
+Hence \texttt{xargs(1)}; this converts arbitrary amounts of standard
+input into as many as necessary executions of a command with the
+standard input converted to not more than the maximum allowed arguments.
+
+\begin{lstlisting}
+|\symbol{36} \textbf{ls \symbol{124} xargs echo \symbol{124} wc \symbol{45}l}|
+|17|
+\end{lstlisting}
+
+Seventeen \texttt{echo} executions were necessary to get through the
+list. Note that parsing \texttt{ls} is typically a bad idea; filenames
+really should be passed around \texttt{nul}-delimited, or handled
+internally by a process. Modern versions of \texttt{find} support either
+the \texttt{\symbol{45}exec ... \symbol{123}\symbol{125} +} form to act
+like \texttt{xargs} without the problems of \texttt{xargs}, or to simply
+remove all these files there is the more efficient
+\texttt{\symbol{45}delete} flag.
+
+\begin{lstlisting}
+|find . \symbol{45}mindepth 1 \symbol{45}exec rm \symbol{123}\symbol{125} +|
+|find . \symbol{45}mindepth 1 \symbol{45}delete|
+\end{lstlisting}
+
+\texttt{ARG\symbol{95}MAX} is not be the only limit; another one
+involves interpreted scripts, those with a ``hash bang'' or ``shebang''
+line. \texttt{zsh} 5.3.1 defaulted to a static \texttt{POUNDBANGLIMIT}
+of 64 characters in \texttt{Src/exec.c}. For a typical shebang line of
+
+\begin{lstlisting}
+|\symbol{35}!/usr/bin/env expect|
+|puts "hello world"|
+\end{lstlisting}
+
+this is not a problem, though packages in NixOS are particularly adept
+at running past this limit.
+
+\begin{lstlisting}
+|\symbol{35} \textbf{find /nix/store \symbol{45}type f \symbol{45}exec perl \symbol{45}nE \symbol{92}}|
+| \ \textbf{'say length if /\symbol{94}\symbol{35}!/ and length \symbol{62} 64; close ARGV' \symbol{123}\symbol{125} +}|
+|68|
+|66|
+|66|
+|...|
+|\symbol{35} \textbf{find /nix/store \symbol{45}type f \symbol{45}exec perl \symbol{45}nE \symbol{92}}|
+| \ \textbf{'say length if /\symbol{94}\symbol{35}!/ and length \symbol{62} 64; close ARGV' \symbol{123}\symbol{125} + \symbol{92}}|
+| \ \textbf{\symbol{124} sort \symbol{45}nr \symbol{124} head \symbol{45}1}|
+|1466|
+|\symbol{35}|
+\end{lstlisting}
+
+A solution? Increase the size of that buffer in \texttt{zsh}. I probably
+should talk more about buffers, but that's another article\ldots
+
+\bibliography{references}
+\end{document}

@@ -2,9 +2,10 @@
 
 .tex.pdf:
 	xelatex -halt-on-error -interaction=batchmode ${.IMPSRC}
-	bibtex ${.PREFIX}.aux
+	-bibtex ${.PREFIX}.aux
 
 a-fork-in-the-road.pdf: a-fork-in-the-road.tex references.bib
+entry.pdf: entry.tex references.bib
 shell-game.pdf: shell-game.tex references.bib
 
 clean:

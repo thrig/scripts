@@ -1,0 +1,4 @@
+*.o
+envdup
+minexec
+minsys
