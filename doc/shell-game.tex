@@ -1,0 +1,917 @@
+\documentclass[10pt,a4paper]{article}
+\setlength{\topmargin}{-5mm}
+\setlength{\textheight}{244mm}
+\setlength{\oddsidemargin}{0mm}
+\setlength{\textwidth}{165mm}
+
+\setlength{\parindent}{0pt}
+
+\usepackage{fancyvrb}
+\DefineVerbatimEnvironment{verbatim}{Verbatim}{xleftmargin=4mm}
+
+\usepackage{lmodern}
+\usepackage[T1]{fontenc}
+\usepackage{pxfonts}
+\usepackage{textcomp}
+
+\usepackage[square]{natbib}
+\citestyle{nature}
+
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily,
+escapeinside={||}}
+
+\frenchspacing
+
+\title{The Shell Game}
+\author{Jeremy Mates}
+\date{June 25, 2021}
+
+\usepackage{hyperref}
+\hypersetup{pdfauthor={Jeremy Mates},pdftitle={The Shell Game}}
+
+\begin{document}
+\renewcommand{\thefootnote}{\alph{footnote}}
+\bibliographystyle{plainnat}
+\maketitle
+
+While the unix shell is much used it may not be the best choice for
+programming; some consider it little more than a useful means to
+orchestrate commands and prototype things. Others have written extensive
+software with it. I'm more in the former camp.
+
+\begin{lstlisting}
+$ |\textbf{(echo one; echo -n two) \symbol{124} while read l; do echo "\symbol{36}l"; done}|
+one
+$ |\textbf{(echo pa; echo re; echo -n ci) \symbol{124} while read l; do echo "\symbol{36}l"; done}|
+pa
+re
+$ 
+\end{lstlisting}
+
+Where did the last line go? Choices here are to double down on this code
+(and maybe miss the occasional line) or to detect and handle this
+condition (longer, slower, and more complicated) or to use a different
+language (my usual solution). However, the shell is common and may
+intrude when debugging other problems so some knowledge of the shell and
+its quirks is essential. Let's review some syntax.
+
+\begin{lstlisting}
+$ |\textbf{echo a b c}|
+a b c
+$ |\textbf{env letters="a b c" sh -c 'echo "\symbol{36}letters"'}|
+a b c
+\end{lstlisting}
+
+Commands take arguments--in two forms. In addition to the usually
+visible command line arguments there is a list of usually invisible
+environment variables passed down by default to every child process.
+Complications include code that runs before the command is run
+
+\begin{lstlisting}
+$ |\textbf{echo a >b c}|
+$ |\textbf{cat b}|
+a c
+$ |\textbf{rm b}|
+\end{lstlisting}
+
+and various order of operation issues:
+
+\begin{lstlisting}
+$ |\textbf{unset FOO}|
+$ |\textbf{FOO=bar echo ">\symbol{36}FOO<"}|
+><
+\end{lstlisting}
+
+In the first example standard output is redirected into the file
+\texttt{b} and the remaining arguments \texttt{a c} are passed to
+\texttt{echo}. In the second case \texttt{\symbol{36}FOO} is first
+interpolated to nothing because \texttt{FOO} is at that point unset, and
+then the \texttt{FOO=bar} assignment happens, and then \texttt{echo}
+runs without any arguments because \texttt{\symbol{36}FOO} was already
+interpolated away. This is akin to breaking eggs over a stove and then
+putting the pan on the stove and then wondering why there's a mess of
+eggs under the pan. \\
+
+\texttt{set -x} is useful:
+
+\begin{lstlisting}
+$ |\textbf{unset FOO}|
+$ |\textbf{set -x}|
+$ |\textbf{FOO=bar echo ">\symbol{36}FOO<"}|
++ echo '><'
++ FOO=bar
+><
+$ |\textbf{set +x}|
++ set +x
+\end{lstlisting}
+
+This shows that the \texttt{echo} indeed ran without argument. It will
+not tell someone unfamiliar with the shell why \texttt{\symbol{36}FOO}
+was already interpolated away; debugging must be paired with at least
+some understanding of how the software works. Still, the trace output
+should help as it may better show what is going on, especially as the
+problems become more complicated and less clear or when requesting help
+from others. \\
+
+Such order of operation issues are by no means exclusive to the shell;
+ECMAScript 6 has a ``Temporal Dead Zone'' (TDZ) where bindings are not
+usable before their declaration, or what could be called the ``eggs on
+the stove before pan'' pattern.
+
+\begin{lstlisting}
+$ |\textbf{node -e 'console.log(typeof x); let x = 42'}|
+...
+ReferenceError: Cannot access 'x' before initialization
+\end{lstlisting}
+
+Many other examples can doubtless be found. One solution in the shell is
+to separate the assignment from the usage (the ``avoid doing too many
+things on one line'' pattern). This can take a variety of forms:
+
+\begin{lstlisting}
+$ |\textbf{unset FOO}|
+$ |\textbf{FOO=bar}|
+$ |\textbf{printf "\symbol{37}s\symbol{92}n\symbol{92}n" \symbol{36}FOO}|
+bar
+
+$ |\textbf{unset FOO}|
+$ |\textbf{FOO=bar ; printf "\symbol{37}s\symbol{92}n\symbol{92}n" \symbol{36}FOO}|
+bar
+
+$ |\textbf{unset FOO}|
+$ |\textbf{FOO=bar sh -c 'echo \symbol{36}FOO'}|
+bar
+\end{lstlisting}
+
+These adjustments assume familiarity with the shell; \texttt{FOO=bar
+echo \symbol{36}FOO} produces no error as it is not invalid, much as one
+can construct a grammatically correct phrase that is flawed in some
+other way. A perhaps useful set of terms from spoken languages: the
+vocabulary, the grammar, and the usage. For the shell the vocabulary
+would in part consist of
+
+\begin{lstlisting}
+    cd          while         ls   echo   &      somevar    SECRET_API_KEY
+    printf      <             --   $      read   >          =
+    /dev/null   /etc/passwd   do   l      -rf    done       rm
+\end{lstlisting}
+
+and the grammar how the vocabulary can be strung together
+
+\begin{lstlisting}
+$ |\textbf{>/dev/null ls}|
+$ |\textbf{>\symbol{38}2 echo \symbol{36}somevar}|
+\end{lstlisting}
+
+while the usage indicates which grammatical forms are most suitable.
+This is the domain of style guides and best practices--or knowing when
+not to use the shell. Redirections are more commonly used after rather
+than before the command even though they may be legal in other
+locations:
+
+\begin{lstlisting}
+$ |\textbf{>/dev/null ls}| # strange
+$ |\textbf{ls >/dev/null}| # more typical
+$ |\textbf{while read l; do echo \symbol{36}l; done </etc/passwd}|
+...
+$ |\textbf{printf \symbol{45}\symbol{45} "\symbol{36}somevar\symbol{92}n" >\symbol{38}2}|
+\end{lstlisting}
+
+An \texttt{</etc/passwd} redirection before a \texttt{while} loop is
+legal in \texttt{zsh}--a usage choice--and illegal in other shells--a
+grammar error.
+
+\begin{lstlisting}
+$ |\textbf{</etc/passwd while read l; do echo \symbol{36}l; done}|
+/opt/local/bin/mksh: syntax error: unexpected 'do'
+$ |\textbf{exec zsh}|
+% |\textbf{</etc/passwd while read l; do echo \symbol{36}l; done}|
+...
+\end{lstlisting}
+
+The conventional form should be used in conventional scripts. While
+debugging ``anything goes'' though one may want to clean things up
+before presenting a problem elsewhere. Or at least to caveat the
+code as such. Non-conventional uses may help reveal bugs or
+portability problems. \\
+
+Let us study the ``\texttt{while} loop drops data'' issue some more.
+Where did the last line go?
+
+\begin{lstlisting}
+$ |\textbf{(echo one;echo -n two)\symbol{124}while read l;do echo ">\symbol{36}l<";done}|
+>one<
+$ |\textbf{printf ",\symbol{37}s,\symbol{92}n" "\symbol{36}l"}|
+,,
+\end{lstlisting}
+
+It did not escape into \texttt{\symbol{36}l} following the loop, and
+presumably the \texttt{do ...} expression was only entered once, which
+the \texttt{><} or \texttt{,,} decorators\footnote{Such ``decorators''
+are useful when there are invisible characters not otherwise
+seen--various whitespace and control characters in ASCII, or
+non-breaking spaces many other problematic characters in Unicode and
+other encodings. A hex dumper may also help. On decorators, use
+whatever you want, though beware decorators that can be mistaken for
+valid outputs.} help establish. Therefore the \texttt{while} or the
+\texttt{read} or a combination of the two is likely to blame. How can
+these be tested in isolation? (Another method would be to read the
+\texttt{read} documentation.)
+
+\begin{lstlisting}
+$ |\textbf{cat input}|
+one
+two
+$ |\textbf{cat code}|
+read l; echo "1:$l:"
+read l; echo "2:$l:"
+read l; echo "3:$l:"
+$ |\textbf{chmod +x code}|
+$ |\textbf{./code < input}|
+1:one:
+2:two:
+3::
+\end{lstlisting}
+
+The three \texttt{read} calls ran despite there being only two lines
+of input. This points to \texttt{while} failing, and if we're
+relatively awake (which is, alas, not always possible while debugging)
+the logical answer is because \texttt{read} returned a false value. We
+can test this hypothesis.
+
+\begin{lstlisting}
+$ |\textbf{cat code}|
+read l; echo ":$l:$?"
+read l; echo ":$l:$?"
+read l; echo ":$l:$?"
+$ |\textbf{./code < input}|
+:one:0
+:two:0
+::1
+\end{lstlisting}
+
+What if when \texttt{read} returns non-zero (false) we run something else?
+
+\begin{lstlisting}
+$ |\textbf{(echo one;echo \symbol{45}n two)\symbol{124}while read l \symbol{124}\symbol{124} echo \symbol{36}l ;do echo \symbol{36}l;done}|
+one
+two
+two
+\end{lstlisting}
+\clearpage
+\begin{lstlisting}
+^C$ ^C
+$ ^C
+$
+\end{lstlisting}
+
+Now there are two instances of \texttt{two} printed, and we had to
+recover the terminal, here by mashing \textbf{control+c} a lot. Also
+note how without a decorator it may not be clear which instance of
+\texttt{echo} is printing what. Another good idea is to slow things
+down. Lacking a ``turbo button'' to press, we add a \texttt{sleep}
+statement.
+
+\begin{lstlisting}
+$ |\textbf{(echo 1;echo \symbol{45}n 2)\symbol{124}while read l \symbol{124}\symbol{124} echo "A\symbol{36}l"; do echo "B\symbol{36}l"; sleep 1; done}|
+B1
+A2
+B2
+A
+B
+^C$
+\end{lstlisting}
+
+With the \texttt{|| echo ...} code turned into a logic test, things are
+looking better:
+
+\begin{lstlisting}
+$ |\textbf{(echo one;echo \symbol{45}n two)\symbol{124}while read l \symbol{124}\symbol{124} [ \symbol{45}n "\symbol{36}l" ];do echo "\symbol{36}l"; done}|
+one
+two
+\end{lstlisting}
+
+There are still problems with this; one may want to set \texttt{IFS} and
+to use the \texttt{-r} flag to \texttt{read}. Also, \texttt{less(1)} has
+a perhaps interesting \texttt{-p} flag.
+
+\begin{lstlisting}
+$ |\textbf{man ksh \symbol{124} less \symbol{45}p '\symbol{94} *read '}|
+...
+\end{lstlisting}
+
+\section*{Concerning Globs}
+
+\begin{lstlisting}
+$ |\textbf{mkdir testdir \symbol{38}\symbol{38} cd testdir}|
+$ |\textbf{touch \symbol{45}\symbol{45} \symbol{45}rf}|
+$ |\textbf{ls *f}|
+.   ..   -rf
+\end{lstlisting}
+
+why were \texttt{.} and \texttt{..} displayed? Use \texttt{set \symbol{45}x} to trace the shell.
+
+\begin{lstlisting}
+$ |\textbf{set \symbol{45}x}|
+$ |\textbf{ls *f}|
++ ls -rf
+.   ..   -rf
+\end{lstlisting}
+
+This shows that \texttt{ls \symbol{45}rf} is run. What do those flags do?
+
+\begin{lstlisting}
+$ |\textbf{man ls \symbol{124} col \symbol{45}bx \symbol{124} egrep '\symbol{94} *\symbol{45}[rf]'}|
+-f  Output is not sorted. This option turns on the -a option.
+-r  Reverse the order of the sort ...
+$ |\textbf{man ls \symbol{124} col \symbol{45}bx \symbol{124} egrep '\symbol{94} *\symbol{45}a'}|
+-a  Include directory entries whose names begin with a dot (.).
+\end{lstlisting}
+
+The \texttt{*f} glob has matched the file \texttt{\symbol{45}rf} which
+the shell then passes to \texttt{ls} which in turn parses
+\texttt{\symbol{45}rf} as a bundle of command line flags. This has
+various security implications. Option processing should ideally be
+disabled prior to a glob, which on most systems and for most commands
+these days is done by supplying \texttt{\symbol{45}\symbol{45}} after
+the last flag and before any external, untrusted input. See
+\texttt{getopt(3)} for details.
+
+\begin{lstlisting}
+$ |\textbf{( set \symbol{45}x; ls \symbol{45}\symbol{45} *f )}|
++ ls -- -rf
+-rf
+$ |\textbf{rm \symbol{45}\symbol{45} \symbol{45}rf}|
+$ |\textbf{ls}|
+$ |\textbf{cd ..}|
+$ |\textbf{rmdir testdir}|
+\end{lstlisting}
+
+Globs are handled differently in different shells; in an empty directory
+(but note that \texttt{/var/empty}\footnote{This footnote was
+intentionally left blank.} is not actually empty on all platforms, or
+may not exist):
+
+\begin{lstlisting}
+$ |\textbf{cd /var/empty}|
+$ |\textbf{echo *}|
+*
+$ |\textbf{PS1='\symbol{37}\symbol{37} ' zsh \symbol{45}f}|
+% |\textbf{echo *}|
+zsh: no matches found: *
+\end{lstlisting}
+ 
+I consider bare globs that are assumed to match nothing unsafe as they
+are a file creation or working directory change away from suddenly
+matching something and then who knows what goes wrong when a filename or
+command flag appears instead of the literal glob. This is of less
+concern during interactive use--``whoa, that was strange''--and of great
+concern when some forgotten shell workflow is blowing up and nobody
+knows why. \\
+
+\texttt{find(1)} also accepts globs; the result may vary depending on
+whether the shell or \texttt{find} performs the glob expansion.
+
+\begin{lstlisting}
+% |\textbf{mkdir testdir \symbol{38}\symbol{38} cd testdir}|
+% |\textbf{mkdir \symbol{45}p \symbol{123}a,b\symbol{125}/\symbol{123}xa,xb\symbol{125}}|
+% |\textbf{find . \symbol{45}name x*}|
+zsh: no matches found: x*
+% |\textbf{exec mksh}|
+$ |\textbf{find . \symbol{45}name x*}|
+./a/xa
+./a/xb
+./b/xa
+./b/xb
+$ |\textbf{touch xom}|
+$ |\textbf{find . \symbol{45}name x*}|
+./xom
+$ |\textbf{find . \symbol{45}name "x*"}|
+./a/xa
+./a/xb
+./b/xa
+./b/xb
+./xom
+\end{lstlisting}
+
+A useful use of a shell glob would be to provide a list of input
+directories (and, maybe, files) to \texttt{find}:
+
+\begin{lstlisting}
+$ |\textbf{find \symbol{45}\symbol{45} * \symbol{45}name "xa"}|
+a/xa
+b/xa
+$ |\textbf{echo find \symbol{45}\symbol{45} * \symbol{45}name "xa"}|
+find -- a b xom -name xa
+\end{lstlisting}
+
+Another trick is the \texttt{zsh \symbol{45}f} used above. This
+disables any user-supplied configuration; if a problem persists then it
+is likely a \texttt{zsh} issue; otherwise, a next step would be to
+bisect the \texttt{zsh} configuration to find where the issue is coming
+from. Similar flags exist for other software, e.g. \texttt{vim
+\symbol{45}u NONE}. This pattern can be abstracted and used to ask
+whether an issue is, say, at the application or network level, assuming
+a suitable test exists that would distinguish an application issue from
+a network one: is the error present in data on the wire, or not? If
+successfully applied this should help direct attention to the component
+where the problem is. \texttt{zsh \symbol{45}f} may however be too
+minimal though from a minimal shell one can apply only what is
+necessary to test the problem.
+
+\clearpage
+\section*{POSIX Word Split}
+
+POSIX word split is another shell convention that must be guarded against.
+
+\begin{lstlisting}
+$ |\textbf{touch "a file"}|
+$ |\textbf{var="a file"}|
+$ |\textbf{echo \symbol{36}var}|
+a file
+\end{lstlisting}
+
+Thanks to POSIX word split \texttt{a file} is actually split into two distinct
+arguments that \texttt{echo} hides and \texttt{rm} reveals.
+
+\begin{lstlisting}
+$ |\textbf{rm \symbol{45}rf \symbol{36}var}|
+rm: a: No such file or directory
+rm: file: No such file or directory
+\end{lstlisting}
+
+When \texttt{\symbol{36}var} contains something like \texttt{/usr/
+somedir} this has on many occasions resulted in the \texttt{/usr} or
+\texttt{/var} or \texttt{Macintosh HD} or other directory trees being
+completely destroyed. \texttt{zsh} does not implement POSIX word split
+and by default passes \texttt{a file} as a single argument to
+\texttt{rm}.
+
+\begin{lstlisting}
+$ |\textbf{exec zsh}|
+% |\textbf{var="a file"}|
+% |\textbf{print \symbol{45}l \symbol{36}var}|
+a file
+% |\textbf{( setopt SH\symbol{95}WORD\symbol{95}SPLIT; print \symbol{45}l \symbol{36}var )}|
+a
+file
+% |\textbf{rm \symbol{36}var}|
+% |\textbf{ls}|
+%
+\end{lstlisting}
+
+\subsection*{POSIX Word Glob}
+
+But wait, there's more! In addition to the POSIX word split, a glob is
+also performed.
+
+\begin{lstlisting}
+$ |\textbf{touch c.txt a.txt}|
+$ |\textbf{sleep 3; touch b.txt}|
+$ |\textbf{var="*.txt \symbol{91}abc\symbol{93}*"}|
+$ |\textbf{set \symbol{45}x}|
+$ |\textbf{ls \symbol{36}var}|
++ ls a.txt b.txt c.txt a.txt b.txt c.txt
+a.txt       a.txt   b.txt   b.txt   c.txt   c.txt
+\end{lstlisting}
+
+Here, the words \texttt{*.txt} and \texttt{\symbol{91}abc\symbol{93}*}
+are first split, and then each is globbed. Note also how \texttt{ls}
+sorts the results; this may give the false impression that the glob or
+filesystem impose a specific ordering that is not actually present. \\
+
+The split can be disabled by quoting the variable:
+
+\begin{lstlisting}
+$ |\textbf{set \symbol{45}x}|
+$ |\textbf{var="a file"}|
++ var='a file'
+$ |\textbf{echo "\symbol{36}var" "\symbol{36}var" "\symbol{36}var"}|
++ echo 'a file' 'a file' 'a file'
+a file a file a file
+\end{lstlisting}
+
+quoting also disables the glob:
+
+\begin{lstlisting}
+$ |\textbf{var="*.txt"}|
++ var='*.txt'
+$ |\textbf{echo "\symbol{36}var"}|
++ echo '*.txt'
+*.txt
+$ |\textbf{rm \symbol{36}var}|
++ rm a.txt b.txt c.txt
+\end{lstlisting}
+
+In general POSIX shell variables must be quoted to avoid the often
+problematic split (and glob!), unless one does want the split (and
+glob!) behavior. In such a case I would probably insert a comment that
+states why that variable must not be quoted to help reduce the chance of
+it being incorrectly quoted by a future maintainer. \\
+
+The lack of word splitting in \texttt{zsh} can cause problems should a
+split be desired, though there is a flag to apply it:
+
+\begin{lstlisting}
+$ |\textbf{zsh}|
+% |\textbf{p='print \symbol{45}l'}|
+% |\textbf{\symbol{36}p foo bar}|
+zsh: command not found: print -l
+% |\textbf{\symbol{36}=p foo bar}|
+foo
+bar
+\end{lstlisting}
+
+An important point here is that \texttt{print \symbol{45}l} could be a
+command name; unix filenames are sequences of bytes that disallow only
+two characters (\texttt{nul} and \texttt{/}). A \texttt{print
+\symbol{45}l} command could be placed into a \texttt{PATH} directory
+and executed:
+
+\begin{lstlisting}
+% |\textbf{mkdir badidea \symbol{38}\symbol{38} cd badidea}|
+% |\textbf{path+=`pwd`}|
+% |\textbf{print "echo not a good idea" > "print \symbol{45}l"}|
+% |\textbf{chmod +x print\symbol{92} \symbol{45}l}|
+% |\textbf{print\symbol{92} \symbol{45}l}|
+not a good idea
+% |\textbf{var="print \symbol{45}l"}|
+% |\textbf{\symbol{36}var}|
+not a good idea
+%
+\end{lstlisting}
+
+But probably should not be. Unexpected characters in filenames mostly
+cause potentially hard to debug problems, especially where Windows (or
+Internet) \texttt{\symbol{92}r\symbol{92}n} linefeeds have gotten into a
+script, in which case the \texttt{\symbol{92}r} is considered part of a
+filename, and not a linebreak:
+
+\begin{lstlisting}
+# |\textbf{bash \symbol{45}\symbol{45}version \symbol{124} sed \symbol{45}n 1p}|
+GNU bash, version 2.05a.0(1)-release (i686-pc-linux-gnu)
+# |\textbf{echo ls\symbol{36}'\symbol{92}r' > cmd}|
+# |\textbf{chmod +x cmd ; ./cmd}|
+: command not found
+\end{lstlisting}
+
+The error reporting for this condition has been improved in modern
+shells, and in any case a hex viewer will reveal any invisible
+characters:
+
+\begin{lstlisting}
+$ |\textbf{printf '\symbol{35}!/usr/bin/env zsh\symbol{92}nls\symbol{92}r\symbol{92}n' > cmd}|
+$ |\textbf{chmod +x cmd ; ./cmd}|
+./cmd:2: command not found: ls^M
+$ |\textbf{od \symbol{45}c cmd}|
+0000000    #   !   /   u   s   r   /   b   i   n   /   e   n   v       z
+0000020    s   h  \n   l   s  \r  \n
+0000027
+\end{lstlisting}
+
+One could create a \texttt{ls\symbol{92}r} command in the \texttt{PATH},
+but a better idea would be to fix the script to not contain
+inappropriate invisible characters.
+
+\clearpage
+\section*{Null Interpolation}
+
+Consider a build directory cleanup script, which might contain
+
+\begin{lstlisting}
+rm -rf build/*
+\end{lstlisting}
+
+This is far too static--what if we need to vary the build directory?
+Hence the improved form
+
+\begin{lstlisting}
+rm -rf "${build}/*"
+\end{lstlisting}
+
+where care has been taken to properly quote \texttt{\symbol{36}build} to
+prevent the POSIX word split (and glob!) thing from nuking inappropriate
+directory trees. \\
+
+The disaster requires two conditions. First, that the code is run as
+\texttt{root}. Second, that someone forgets to set
+\texttt{\symbol{36}build}. In this case the command that is run is
+
+\begin{lstlisting}
+rm -rf /*
+\end{lstlisting}
+
+This might be a good time to mention backups, snapshots, configuration
+management, and various other ways to restore or rebuild a working
+environment. The shell has long contained features that guard against
+such null interpolation; the ``Heirloom Bourne Shell'' supports:
+
+\begin{lstlisting}
+    set [--aefhknptuvx [arg ...]]
+    ...
+      -u  Treat unset variables as an error when substituting.
+
+    ${parameter:?word}
+      If parameter is set and not empty then substitute its value;
+      otherwise, print word and exit from the shell. ...
+\end{lstlisting}
+
+or manual checks that necessary variables are set can be made. The
+following is fairly similar to a
+\texttt{\symbol{36}\symbol{123}parameter:?word\symbol{125}} expansion.
+
+\begin{lstlisting}
+#!/bin/sh
+if [ -z "$build" ]; then
+   echo >&2 "$0: 'build' variable is not set"
+   exit 1
+fi
+...
+\end{lstlisting}
+
+\section*{Subshells and Processes}
+
+Earlier a subshell was used without naming it:
+
+\begin{lstlisting}
+$ |\textbf{( set \symbol{45}x; ls \symbol{45}\symbol{45} *f )}|
+\end{lstlisting}
+
+This isolates the \texttt{set \symbol{45}x} change to a child process.
+The isolation also applies to shell variables:
+
+\begin{lstlisting}
+$ |\textbf{var=orig}|
+$ |\textbf{( var=new; echo "\symbol{36}var" )}|
+new
+$ |\textbf{echo "\symbol{36}var"}|
+orig
+\end{lstlisting}
+
+This isolation can manifest in unexpected and perhaps undesirable ways,
+for instance in a \texttt{while} loop:
+
+\begin{lstlisting}
+$ |\textbf{var=orig}|
+$ |\textbf{echo new \symbol{124} while read l; do var=\symbol{36}l; echo \symbol{36}var; done}|
+new
+$ |\textbf{echo "\symbol{36}var"}|
+orig
+\end{lstlisting}
+
+Child processes cannot alter the parent process; this is why the
+\texttt{orig} value in \texttt{var} reappears after the subshell
+completes. Actually, the previous statement is slightly false; a child
+process can change the parent because certain resources are shared
+between them. Identification of subshells is possible with process
+listing tools, or via methods specific and internal to the shell, or by
+various system call or kernel tracing methods. (Or when your shell code
+does something unexpected that reveals a subshell.) \\
+
+Process listings are transitory and shell commands may complete very
+quickly, especially when they fail. One trick is to add \texttt{sleep}
+calls to slow down the speed of execution:
+
+\begin{lstlisting}
+% |\textbf{( sleep 31; echo new ) \symbol{92}}|
+|\textbf{\symbol{124} while read l; do var=\symbol{36}l; echo \symbol{36}var; sleep 33; done}|
+\end{lstlisting}
+
+In another terminal inspect the process listing; \texttt{pstree(1)} is
+useful for this:
+
+\begin{lstlisting}
+% |\textbf{pstree > x}|
+% |\textbf{grep \symbol{45}2 sleep x}|
+| \symbol{124} \symbol{124}\symbol{45}+= 00528 jmates zsh \symbol{45}l|
+| \symbol{124} \symbol{124} \symbol{92}\symbol{45}+= 30192 jmates zsh \symbol{45}l|
+| \symbol{124} \symbol{124} \ \ \symbol{92}\symbol{45}\symbol{45}\symbol{45} 30193 jmates sleep 31|
+| \symbol{124} \symbol{124}\symbol{45}\symbol{45}= 00531 jmates zsh \symbol{45}l|
+| \symbol{124} \symbol{124}\symbol{45}\symbol{45}= 00534 jmates zsh \symbol{45}l|
+\end{lstlisting}
+
+As an exercise, consider why the \texttt{sleep 31} but not the
+\texttt{sleep 33} appears in the listing. What happens if the
+\texttt{echo new} command is placed before the \texttt{sleep 31}? \\
+
+The commands can be better tied to the process table by logging the
+process ID somewhere; this may be necessary on busy systems where there
+are many other processes that may match what is being searched for:
+
+\begin{lstlisting}
+| ( echo >\symbol{38}2 \symbol{36}\symbol{36}; sleep 31; ... ) \symbol{124} ...|
+\end{lstlisting}
+
+\texttt{\symbol{36}\symbol{36}} however does not identify subshells:
+
+\begin{lstlisting}
+$ |\textbf{(echo >\symbol{38}2 p\symbol{36}\symbol{36}; echo foo) \symbol{124} while read l; do echo s\symbol{36}\symbol{36}; done}|
+p22531
+s22531
+\end{lstlisting}
+
+A shell may have variables that will display the ID of the subshell.
+
+\begin{lstlisting}
+$ |\textbf{exec mksh}|
+$ |\textbf{echo \symbol{36}BASHPID ; ( echo \symbol{36}BASHPID )}|
+30300
+30303
+$ |\textbf{exec zsh}|
+% |\textbf{zmodload zsh/system}|
+% |\textbf{print \symbol{36}sysparams\symbol{91}pid\symbol{93}; (print \symbol{36}sysparams\symbol{91}pid\symbol{93})}|
+30294
+30296
+\end{lstlisting}
+
+Another option may be to change the name of a process to make it easier
+to find; various languages also have \texttt{sleep} calls that avoid the
+complication of a \texttt{( sleep ... ; command ... )} subshell:
+
+\begin{lstlisting}
+% |\textbf{perl \symbol{45}e '\symbol{36}0 = "asdf"; sleep 99' \symbol{38}}|
+|\symbol{91}1\symbol{93} 30390|
+% |\textbf{ruby \symbol{45}e '\symbol{36}0 = "asdf"; sleep 99' \symbol{38}}|
+|\symbol{91}2\symbol{93} 30391|
+% |\textbf{ps o pid,command \symbol{124} grep 'asd\symbol{91}f\symbol{93}'}|
+30390 asdf
+30391 asdf
+\end{lstlisting}
+
+Note that process naming is not portable; the above is from Mac OS X; on
+OpenBSD the name includes the name of the interpreter involved.
+
+\begin{lstlisting}
+$ |\textbf{perl \symbol{45}e '\symbol{36}0 = "asdf"; sleep 99' \symbol{38}}|
+|\symbol{91}1\symbol{93} 15860|
+$ |\textbf{ruby \symbol{45}e '\symbol{36}0 = "asdf"; sleep 99' \symbol{38}}|
+|\symbol{91}2\symbol{93} 52604|
+$ |\textbf{ps o pid,command \symbol{124} grep 'asd\symbol{91}f\symbol{93}'}|
+15860 perl: asdf (perl)
+52604 ruby: asdf (ruby30)
+\end{lstlisting}
+
+The use of the \texttt{pgrep(1)} and \texttt{pkill(1)} commands instead
+of \texttt{ps(1)} may be beneficial; these do not need the
+\texttt{asd\symbol{91}f\symbol{93}} trick that prevents \texttt{grep}
+from sometimes matching itself in the process table.
+
+\begin{lstlisting}
+% |\textbf{sleep 99 \symbol{38}}|
+|\symbol{91}1\symbol{93} 30439|
+% |\textbf{ps o pid,command \symbol{124} grep sleep}|
+30439 sleep 99
+30441 grep sleep
+% |\textbf{pgrep sleep}|
+30439
+\end{lstlisting}
+
+Process listing tools are unportable; review the documentation specific
+to the commands for the system in question. A coworker once wrote a
+\texttt{killall} command for Digital UNIX, but ended up running the
+vendor-provided \texttt{killall} on Solaris when they moved their script
+there. Ooops. \\
+
+Another concern is that process listings are only a snapshot; processes
+can be created and destroyed while \texttt{ps} is running and thus may
+not be seen by \texttt{ps}. \texttt{CVE\symbol{45}2018\symbol{45}1121}
+details a trick where a process would receive a notification when the
+process table was being scanned and would then fork itself to avoid
+being listed in the process table. \\
+
+Process tracing facilities can also track what goes on in a shell
+pipeline; \texttt{acct(2)} appeared in Version 7 AT\&T UNIX. Since then
+more elaborate tracing facilities have been created, notably DTrace,
+though other tools such as \texttt{ktrace} or \texttt{strace} or
+\texttt{sysdig} are useful as well. On Linux \texttt{strace(1)} collects
+information on all the system calls made; the above shell pipeline run
+under \texttt{strace} reveals that three unique processes were traced.
+
+\begin{lstlisting}
+$ |\textbf{cat cmd}|
+|\symbol{35}!/bin/sh|
+|echo new \symbol{124} while read l; do var=\symbol{36}l; echo "x\symbol{36}var"; done|
+$ |\textbf{chmod +x cmd}|
+$ |\textbf{strace \symbol{45}ff \symbol{45}o out ./cmd}|
+xnew
+$ |\textbf{echo out*}|
+out.22172 out.22173 out.22174
+\end{lstlisting}
+
+System calls operate at a different level than the shell code; the
+\texttt{new} string appears in \texttt{read(2)} and \texttt{write(2)}
+system calls
+
+\begin{lstlisting}
+$ |\textbf{grep new out*}|
+|out.22172:read(3, "\symbol{35}!/bin/sh\symbol{92}necho new \symbol{124} while read "...|
+|out.22172:read(255, "\symbol{35}!/bin/sh\symbol{92}necho new \symbol{124} while read "...|
+|out.22173:write(1, "new\symbol{92}n", 4)                    = 4|
+|out.22174:write(1, "xnew\symbol{92}n", 5)                   = 5|
+$ |\textbf{man 2 read \symbol{124} col \symbol{45}bx \symbol{124} awk '/read\symbol{92}(/\symbol{123}print;exit\symbol{125}'}|
+|ssize\symbol{95}t read(int fd, void *buf, size\symbol{95}t count);|
+\end{lstlisting}
+
+made by the main shell process, PID 22172, that reads the script
+\texttt{cmd} off of the filesystem, and two subshell processes, one that
+writes the string (PID 22173, corresponding to the \texttt{echo new}
+shell code) and the other that carries out the code for the
+\texttt{while} loop (PID 22174, shell code \texttt{echo
+"x\symbol{36}var"}). Note that PID 22174 must at some point read in the
+string \texttt{new}, written to it by PID 22173\ldots why does that not
+appear? An inspection of the trace file reveals single character reads
+of the string via standard input (file descriptor \texttt{0}):
+
+\clearpage
+\begin{lstlisting}
+$ |\textbf{grep \symbol{45}A 3 '"n' out.22174}|
+read(0, "n", 1)                         = 1
+read(0, "e", 1)                         = 1
+read(0, "w", 1)                         = 1
+|read(0, "\symbol{92}n", 1)                        = 1|
+\end{lstlisting}
+
+String and file path tracing with \texttt{strace} may require suitable
+\texttt{\symbol{45}s} and \texttt{\symbol{45}y} flags especially when
+large amounts of data--where ``large'' is anything longer than 32
+characters--or many different files are being used. If this sounds all
+very new and strange, ``Advanced Programming in the Unix
+Environment''\cite{stevens2013} is a classic text; study the C programs
+therein and trace them as they run.
+
+\section*{Exec Wrappers}
+
+Less complicated than tracing and useful for other purposes are small
+wrapper programs that carry out some task and then \texttt{exec} another
+program. These are typically but need not be shell scripts. Instead of
+tracing a huge application, one might have that application call the
+following \texttt{exec} wrapper:
+
+\begin{lstlisting}
+|\symbol{35}!/bin/sh|
+|TMPFILE=`mktemp \symbol{45}t /tmp/log.XXXXXXXXXX` \symbol{38}\symbol{38} \symbol{92}|
+| \  ( id ; tty ; env ; echo "\symbol{36}@" ) >\symbol{62} "\symbol{36}TMPFILE"|
+|exec /path/to/the/real/program "\symbol{36}@"|
+\end{lstlisting}
+
+Then the huge application can be run and the resulting
+\texttt{/tmp/log.*} files inspected for the details logged. Targeted
+tracing could also be accomplished with \texttt{sysdig} on Linux, among
+various other options. \\
+
+The wrapper program should not alter the standard input streams; reading
+from standard input would by default prevent what was read from reaching
+the real program. \\
+
+A common use for a wrapper is to alter environment variables:
+
+\begin{lstlisting}
+$ |\textbf{cat wrapper}|
+|\symbol{35}!/bin/sh|
+|unset SECRET\symbol{95}API\symbol{95}KEY|
+|export PATH=/plugin/dir:\symbol{36}PATH|
+|exec "\symbol{36}@"|
+$ |\textbf{chmod +x ./wrapper}|
+$ |\textbf{export SECRET\symbol{95}API\symbol{95}KEY=muffins\symbol{45}dreamspork\symbol{45}hodgepodge}|
+$ |\textbf{./wrapper sh \symbol{45}c 'echo ">\symbol{36}SECRET\symbol{95}API\symbol{95}KEY<"'}|
+><
+\end{lstlisting}
+
+The downside of this method is that there is an additional fork and exec
+of a process; the environment could instead be customized in the parent
+process between the \texttt{fork} and subsequent \texttt{exec}. On the
+other hand, the parent process may not be possible to modify, and in
+many cases such wrapper programs are not run where performance is
+critical. Shell functions can also be used to replace wrapper scripts.
+Care must be taken that the shell function does not call itself.
+
+\begin{lstlisting}
+# bad! calls itself
+|function info \symbol{123} info "\symbol{36}@" 2>/dev/null \symbol{124} \symbol{36}PAGER; \symbol{125}|
+
+# better (emacs users might disagree)
+|function info \symbol{123} command info "\symbol{36}@" 2>/dev/null \symbol{124} \symbol{36}PAGER; \symbol{125}|
+\end{lstlisting}
+
+Wrappers may be necessary for security where a process is unable to
+properly clean up the environment. For example, one may wish to
+ensure that a program is not passed duplicate environment variables.
+For this I use the \texttt{nodupenv} wrapper program. Also required
+is \texttt{dupenv} to create duplicate environment variables for
+testing purposes.
+
+\begin{lstlisting}
+$ |\textbf{dupenv FOO=x FOO=y env \symbol{124} grep FOO}|
+FOO=x
+FOO=y
+$ |\textbf{dupenv FOO=x FOO=y FOO=z nodupenv env \symbol{124} grep FOO}|
+FOO=x
+\end{lstlisting}
+
+Wait, environment variables can be duplicated? How does that work? Now
+might be a good time to talk about programs and their arguments in some
+detail, but so ends the shell game.
+
+\bibliography{references}
+\end{document}
