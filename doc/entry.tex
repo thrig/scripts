@@ -25,7 +25,7 @@ escapeinside={||}}
 
 \title{Entry}
 \author{Jeremy Mates}
-\date{June 26, 2021}
+\date{June 27, 2021}
 
 \usepackage{hyperref}
 \hypersetup{pdfauthor={Jeremy Mates},pdftitle={Entry}}
@@ -36,10 +36,10 @@ escapeinside={||}}
 \maketitle
 
 \begin{lstlisting}
-$ |\textbf{FOO=a ruby \symbol{45}e 'puts ENV\symbol{91}"FOO"\symbol{93}, ARGV' b c}|
-a
-b
-c
+|\symbol{36} \textbf{FOO=a ruby \symbol{45}e 'puts ENV\symbol{91}"FOO"\symbol{93}, ARGV' b c}|
+|a|
+|b|
+|c|
 \end{lstlisting}
 
 An important difference between the arguments list--\texttt{b} and
@@ -55,15 +55,15 @@ are set, or language-specific features to view what is often the same
 list. Here are some different ways of doing the same thing.
 
 \begin{lstlisting}
-$ |\textbf{export FOO=zot}|
-$ |\textbf{expect \symbol{45}c 'puts \symbol{36}env(FOO); puts \symbol{91}exec env \symbol{124} grep FOO\symbol{93}'}|
-zot
-FOO=zot
-$ |\textbf{perl \symbol{45}E 'say \symbol{36}ENV\symbol{123}FOO\symbol{125}; exec "env"' \symbol{124} grep zot}|
-zot
-FOO=zot
-$ |\textbf{ruby \symbol{45}e 'puts ENV\symbol{91}"FOO"\symbol{93}; exec "env"' \symbol{124} grep zot}|
-FOO=zot
+|\symbol{36} \textbf{export FOO=zot}|
+|\symbol{36} \textbf{expect \symbol{45}c 'puts \symbol{36}env(FOO); puts \symbol{91}exec env \symbol{124} grep FOO\symbol{93}'}|
+|zot|
+|FOO=zot|
+|\symbol{36} \textbf{perl \symbol{45}E 'say \symbol{36}ENV\symbol{123}FOO\symbol{125}; exec "env"' \symbol{124} grep zot}|
+|zot|
+|FOO=zot|
+|\symbol{36} \textbf{ruby \symbol{45}e 'puts ENV\symbol{91}"FOO"\symbol{93}; exec "env"' \symbol{124} grep zot}|
+|FOO=zot|
 \end{lstlisting}
 
 Note that the \texttt{expect} (TCL) \texttt{exec} is nothing like the OS
@@ -76,21 +76,21 @@ process to hang around afterwards. \texttt{system(3)} is often exploited
 if an attacker can pass in arbitrary shell code, somehow. \\
 
 \texttt{ruby} needs a \texttt{STDOUT.flush} call to behave like the
-other processes; this is a buffering issue.
+other processes. This is a buffering issue.
 
 \begin{lstlisting}
-$ |\textbf{ruby \symbol{45}e 'puts ENV\symbol{91}"FOO"\symbol{93}; STDOUT.flush; exec "env"' \symbol{124} grep zot}|
-zot
-FOO=zot
+|\symbol{36} \textbf{ruby \symbol{45}e 'puts ENV\symbol{91}"FOO"\symbol{93}; STDOUT.flush; exec "env"' \symbol{124} grep zot}|
+|zot|
+|FOO=zot|
 \end{lstlisting}
 
 On linux, the \texttt{/proc/.../environ} file is another way to inspect
 the environment of a process.
 
 \begin{lstlisting}
-# |\textbf{cd /proc/\symbol{36}\symbol{36}}|
-# |\textbf{cat environ}|
-USER=rootLOGNAME=rootHOME=/rootPATH=/usr/local/sbin:/us...
+|\symbol{35} \textbf{cd /proc/\symbol{36}\symbol{36}}|
+|\symbol{35} \textbf{cat environ}|
+|USER=rootLOGNAME=rootHOME=/rootPATH=/usr/local/sbin:/us...|
 \end{lstlisting}
 
 If the output is a mess, run it through a hex
@@ -99,8 +99,8 @@ installed \texttt{xxd}--to see what is going on. This may reveal
 characters such as
 
 \begin{lstlisting}
-# |\textbf{hexdump \symbol{45}C environ \symbol{124} head \symbol{45}1}|
-00000000  55 53 45 52 3d 72 6f 6f  74 00 4c 4f ...
+|\symbol{35} \textbf{hexdump \symbol{45}C environ \symbol{124} head \symbol{45}1}|
+|00000000 \ 55 53 45 52 3d 72 6f 6f \ 74 00 4c 4f ...|
 \end{lstlisting}
 
 \texttt{nul} as shown by the hex code \texttt{00}. Now is a good time to
@@ -112,23 +112,24 @@ encoding-aware tools to better display and debug them. The
 human consumption; map the \texttt{NUL} values to newlines:
 
 \begin{lstlisting}
-# |\textbf{tr '\symbol{92}0' '\symbol{92}n' < environ}|
-...
+|\symbol{35} \textbf{tr '\symbol{92}0' '\symbol{92}n' < environ}|
+|...|
 \end{lstlisting}
 
-Various invisible characters--or Unicode characters that appear to be
-similar to an ASCII hyphen but are not--can also be problematic. A hex
-viewer should reveal their presence. The font will also influence how
-similar different characters appear to be. Even worse, terminals or
-operating systems may normalize characters run through copy and paste,
-or a document may contain something besides the indicated character. All
-this can complicate debugging.
+Various invisible characters or Unicode characters that appear to be
+similar to ASCII but are not can also be problematic. A hex viewer
+should reveal their presence. The font will also influence how similar
+different characters appear to be. Even worse, terminals or operating
+systems may normalize characters run through copy and paste, or a
+document may contain something besides the indicated character. All this
+may complicate debugging. Take screenshots, use a hex dumper, and show
+the code used.
 
 \begin{lstlisting}
-$ |\textbf{ls --al}|
+|\symbol{36} \textbf{ls --al}|
 |ls: --al: No such file or directory|
-$ |\textbf{echo 'ls --al' \symbol{124} hexdump}|
-00000000 6c 73 20 e2 80 93 61 6c 0a
+|\symbol{36} \textbf{echo 'ls --al' \symbol{124} hexdump}|
+|00000000 6c 73 20 e2 80 93 61 6c 0a|
 \end{lstlisting}
 
 Here the \texttt{e2 80 93} between the space \texttt{20} and the
@@ -138,14 +139,14 @@ letter a \texttt{61} represent the Unicode character 'EN DASH'
 When something weird happens, run the data through a hex viewer, or use
 a process tracing tool such as \texttt{strace}. \texttt{strace} will
 reveal the exact argument list used and may help diagnose how an unknown
-ball of code is calling external programs. This usually boils down to
-some \texttt{exec} call, though there may also be calls to \texttt{sh}
-involved, depending on the input.
+ball of code is calling a program. This usually boils down to some
+\texttt{exec} call, though there may also be calls that involve the
+shell somehow.
 
 \begin{lstlisting}
-$ |\textbf{strace \symbol{45}f  \symbol{45}o eg1 ruby \symbol{45}e '`echo easygrep`'}|
-$ |\textbf{strace \symbol{45}f  \symbol{45}o eg2 ruby \symbol{45}e '`echo easygrep\symbol{38}`'}|
-$ |\textbf{grep easygrep eg* \symbol{124} grep execve \symbol{124} grep \symbol{45}v ruby}|
+|\symbol{36} \textbf{strace \symbol{45}f  \symbol{45}o eg1 ruby \symbol{45}e '`echo easygrep`'}|
+|\symbol{36} \textbf{strace \symbol{45}f  \symbol{45}o eg2 ruby \symbol{45}e '`echo easygrep\symbol{38}`'}|
+|\symbol{36} \textbf{grep easygrep eg* \symbol{124} grep execve \symbol{124} grep \symbol{45}v ruby}|
 |eg1:4186 execve("/usr/bin/echo", \symbol{91}"echo", "easygrep"\symbol{93} ...|
 |eg2:4206 execve("/bin/sh", \symbol{91}"sh", "\symbol{45}c", "echo easygrep\symbol{38}"\symbol{93} ...|
 \end{lstlisting}
@@ -165,32 +166,31 @@ should not be mixed with those of the subcommand; other programs such as
 arguments appear in specific ways;
 
 \begin{lstlisting}
-# wrong!
+|\symbol{35} wrong\symbol{33}|
 |find \symbol{45}name "foo*" /etc|
 
-# correct
+|\symbol{35} correct|
 |find /etc \symbol{45}name "foo*"|
 
-# same -C, different meanings
+|\symbol{35} same -C, different meanings|
 |git \symbol{45}C <path> commit \symbol{45}C <commit> ...|
 \end{lstlisting}
 
-this is in contrast to other commands where the options can actually
-appear after other arguments. Such usages may be frowned on, or
-unportable.
+this is in contrast to other commands where the options can appear after
+other arguments. Such usages may be frowned on, or unportable.
 
 \begin{lstlisting}
-# atypical
-$ |\textbf{grep root /etc \symbol{45}r}|
-...
+|\symbol{35} atypical|
+|\symbol{36} \textbf{grep root /etc \symbol{45}r}|
+|...|
 
-# more common
-$ |\textbf{grep -r root /etc}|
-...
+|\symbol{35} more common|
+|\symbol{36} \textbf{grep -r root /etc}|
+|...|
 
-# disable option processing, see getopt(3)
-$ |\textbf{grep \symbol{45}r \symbol{45}\symbol{45} "\symbol{36}pattern" /etc}|
-...
+|\symbol{35} disable option processing, see getopt(3)|
+|\symbol{36} \textbf{grep \symbol{45}r \symbol{45}\symbol{45} "\symbol{36}pattern" /etc}|
+|...|
 \end{lstlisting}
 
 In general the manual page must be studied to see which inputs and in
@@ -213,17 +213,17 @@ the deep end of the pool.
 
 \lstinputlisting{code/envandargs.asm}
 
-This is NASM format assembly for an amd64 Linux system that does little
+This is NASM format assembly for an AMD64 Linux system that does little
 more than pop 64-bit values off the stack into a register. This is only
 useful under a debugger. With this file saved as \texttt{envandargs.asm}
 the assembly, linking, and launching it under a debugger may run
 something like
 
 \begin{lstlisting}
-$ |\textbf{nasm \symbol{45}f elf64 \symbol{45}g \symbol{45}F dwarf \symbol{45}o envandargs.o envandargs.asm}|
-$ |\textbf{ld \symbol{45}o envandargs envandargs.o}|
-$ |\textbf{gdb envandargs}|
-...
+|\symbol{36} \textbf{nasm \symbol{45}f elf64 \symbol{45}g \symbol{45}F dwarf \symbol{45}o envandargs.o envandargs.asm}|
+|\symbol{36} \textbf{ld \symbol{45}o envandargs envandargs.o}|
+|\symbol{36} \textbf{gdb envandargs}|
+|...|
 \end{lstlisting}
 
 Then, in \texttt{gdb}, we keep track of the \texttt{RCX} register:
