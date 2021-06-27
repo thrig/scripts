@@ -4,6 +4,8 @@
 \setlength{\oddsidemargin}{0mm}
 \setlength{\textwidth}{165mm}
 
+\setlength{\parindent}{0pt}
+
 \usepackage{fancyvrb}
 \DefineVerbatimEnvironment{verbatim}{Verbatim}{xleftmargin=4mm}
 
@@ -22,7 +24,7 @@ escapeinside={||}}
 
 \title{A \texttt{fork()} in the Road}
 \author{Jeremy Mates}
-\date{June 24, 2021}
+\date{June 27, 2021}
 
 \usepackage{hyperref}
 \hypersetup{pdfauthor={Jeremy Mates},pdftitle={A fork() in the Road}}
@@ -49,88 +51,98 @@ good operating system? Probably. \\
 \texttt{v12.16.1}) if you printed to the console in a loop via
 
 \begin{lstlisting}
-$ |\textbf{node -e 'while (1) \{ process.stdout.write("a") \}' > /dev/null}|
-Bus error (core dumped)
+|\symbol{36} \textbf{node -e 'while (1) \{ process.stdout.write("a") \}' > /dev/null}|
+|Bus error (core dumped)|
 \end{lstlisting}
 
 so it's not surprising to me that it would have other problems such as
-taking a long time to fork. Perhaps as skill with heavily multithreaded
-programs goes up such issues will get ironed out? Assuming the process
-even needs to be multithreaded and to fork. \\
+taking a long time to fork. Perhaps as skill with heavily
+multithreaded programs that actually need to fork goes up such issues
+will get ironed out? \\
 
-Anyways, how atypical is Chrome? Let's look at memory use on the 2009
-MacBook.
+Anyways, how atypical is Chrome? Let's look at top memory use on the
+2009 MacBook.
 
 \begin{lstlisting}
-PID  COMMAND      %CPU TIME     #TH   #WQ  #PORT MEM
-0    kernel_task  0.7  12:14.54 114/2 0    2     380M
-380  QuickTime Pl 0.0  50:45.86 15    2    342   57M
-232  WindowServer 0.3  47:39.50 5     2    311   56M
-281  iTerm2       0.2  03:04.65 6     0    252   28M
-287  Finder       0.0  00:07.63 3     0    271   26M
-285  Dock         0.0  00:01.76 3     0    225   24M
-463  Sudoku       0.0  00:09.48 6     1    275   22M
-482  Dictionary   0.0  00:00.79 5     0    200   19M
-298  Spotlight    0.0  00:00.73 4     0    171   10M
+|PID \ COMMAND \ \ \ \ \ \symbol{37}CPU TIME \ \ \ \ \symbol{35}TH \ \ \symbol{35}WQ \ \symbol{35}PORT MEM|
+|0 \ \ \ kernel\symbol{95}task \ 0.7 \ 12:14.54 114/2 0 \ \ \ 2 \ \ \ \ 380M|
+|380 \ QuickTime Pl 0.0 \ 50:45.86 15 \ \ \ 2 \ \ \ 342 \ \ 57M|
+|232 \ WindowServer 0.3 \ 47:39.50 5 \ \ \ \ 2 \ \ \ 311 \ \ 56M|
+|281 \ iTerm2 \ \ \ \ \ \ 0.2 \ 03:04.65 6 \ \ \ \ 0 \ \ \ 252 \ \ 28M|
+|287 \ Finder \ \ \ \ \ \ 0.0 \ 00:07.63 3 \ \ \ \ 0 \ \ \ 271 \ \ 26M|
+|285 \ Dock \ \ \ \ \ \ \ \ 0.0 \ 00:01.76 3 \ \ \ \ 0 \ \ \ 225 \ \ 24M|
+|463 \ Sudoku \ \ \ \ \ \ 0.0 \ 00:09.48 6 \ \ \ \ 1 \ \ \ 275 \ \ 22M|
+|482 \ Dictionary \ \ 0.0 \ 00:00.79 5 \ \ \ \ 0 \ \ \ 200 \ \ 19M|
 \end{lstlisting}
 
 Do those memory intensive processes fork? At all? What does fork a lot?
 The shells, which are using\ldots oh there they are, 1888K, 2268K, etc.
-Would \texttt{posix\_spawn} even help for processes that small? How much
-memory does Chrome use? I'd have to install it to find out; Safari.app
-under Mac OS X 10.11 uses around 128M doing nothing, or two orders of
-magnitude more memory than the shells. I've heard stories of Chrome
-eating into another order of magnitude, or two? Chrome having problems
-with \texttt{fork()} is less about \texttt{fork()} and more about Chrome
-being, well, bloaty.
+Would \texttt{posix\_spawn} even help for processes that small, assuming
+you can live without the error reporting? How much memory does Chrome
+use? I'd have to install it to find out; Safari.app under Mac OS X 10.11
+uses around 128M doing nothing. I've heard stories of Chrome eating into
+another order of magnitude, or two? Chrome having problems with
+\texttt{fork()} is less about \texttt{fork()} and more about Chrome
+being, well, bloaty.\footnote{Common references here include ``Mr.
+Creosote'' from ``The Meaning of Life'' or the ``Akira'' stadium scene
+to describe how a 1990s hypermedia platform has metastasized. Alas,
+computer science has not granted us laser rifles nor wafer-thin
+after-dinner mints.}
 
 \section*{Cherry Picking}
 
-I too can cherry pick things favorable to my position. Here are my
-OpenBSD processes that fork, a lot:
+I too can cherry pick processes favorable to my position. Here is what
+forks a lot on my OpenBSD system:
 
 \begin{lstlisting}
-$ |\textbf{ps axo rss,vsz,args \symbol{124} grep s[h]}|
-  968  1008 /bin/sh /etc/X11/xenodm/Xsession
- 1148  1220 /bin/ksh -l
- 1052  1020 /bin/ksh -l
- 1068  1152 /bin/ksh -l
- 1036  1016 /bin/ksh -l
+|\symbol{36} \textbf{ps axo rss,vsz,args \symbol{124} grep s\symbol{91}h\symbol{93}}|
+|968 \ 1008 /bin/sh /etc/X11/xenodm/Xsession|
+|1148 \ 1220 /bin/ksh \symbol{45}l|
+|1052 \ 1020 /bin/ksh \symbol{45}l|
+|1068 \ 1152 /bin/ksh \symbol{45}l|
+|1036 \ 1016 /bin/ksh \symbol{45}l|
 \end{lstlisting}
 
-And here we sort on the RES column in \texttt{top(1)} with the output
-cleaned up a bit:
+And next we sort on the \texttt{RES} column in \texttt{top(1)} with the
+output cleaned up a bit:
 
 \begin{lstlisting}
-   PID USERNAME SIZE   RES STATE   TIME   CPU COMMAND
- 64699 _x11      42M   52M sleep/0 0:19 0.49% Xorg
- 54110 jmates    19M   24M sleep/0 0:02 0.00% mupdf-x11
- 49777 jmates    12M   18M sleep/0 0:04 0.00% irssi
-  2134 root    2100K 8080K idle    0:01 0.00% xenodm
-  3606 jmates  1148K 6748K sleep/1 0:00 0.00% cwm
- 45572 jmates  1884K 5784K sleep/1 0:05 0.00% xterm
- 14369 jmates  1884K 5756K sleep/1 0:07 0.00% xterm
- 86394 jmates  1868K 5740K sleep/1 0:01 0.00% xterm
- 46500 jmates  1864K 5740K sleep/0 0:01 0.00% xterm
- 76013 jmates  4812K 5344K sleep/1 0:01 0.00% vim
+| \ \ PID USERNAME SIZE \ \ RES STATE \ \ TIME \ \ CPU COMMAND|
+| 64699 \symbol{95}x11 \ \ \ \ \ 42M \ \ 52M sleep/0 0:19 0.49\symbol{37} Xorg|
+| 54110 jmates \ \ \ 19M \ \ 24M sleep/0 0:02 0.00\symbol{37} mupdf\symbol{45}x11|
+| 49777 jmates \ \ \ 12M \ \ 18M sleep/0 0:04 0.00\symbol{37} irssi|
+| \ 2134 root \ \ \ 2100K 8080K idle \ \ \ 0:01 0.00\symbol{37} xenodm|
+| \ 3606 jmates \ 1148K 6748K sleep/1 0:00 0.00\symbol{37} cwm|
+| 45572 jmates \ 1884K 5784K sleep/1 0:05 0.00\symbol{37} xterm|
+| 14369 jmates \ 1884K 5756K sleep/1 0:07 0.00\symbol{37} xterm|
+| 86394 jmates \ 1868K 5740K sleep/1 0:01 0.00\symbol{37} xterm|
+| 46500 jmates \ 1864K 5740K sleep/0 0:01 0.00\symbol{37} xterm|
+| 76013 jmates \ 4812K 5344K sleep/1 0:01 0.00\symbol{37} vim|
 \end{lstlisting}
 
 \texttt{cwm(1)} and \texttt{vim(1)} are the only where notable fork/exec
-would happen, and not ever in any sort of performance critical path; in
-the others fork/exec would be minimal to zero; in the case of Xorg and
-irssi \texttt{execve(2)} is not even allowed. And the multi-threaded
-programs, all of them:
+would happen, and not ever in any sort of performance critical path;
+worst case would be the a fork/exec of a script that in turn forks/execs
+four \texttt{xterm} which in turn forks/execs four scripts that start or
+resume four \texttt{tmux} sessions. This all happens quickly enough to
+not bother me; Chromium, meanwhile, back when I had it installed, I
+thought it had wedged at startup as it was burning through CPU but not
+apparently doing anything.\footnote{Microsoft Teams I started exactly
+once on the 2009 MacBook. Then I uninstalled it. It used more CPU just
+getting up off disk than the IRC client had in days of running.}
+Patience, how long will that take? In the other processes fork/exec
+would be minimal to zero; in the case of Xorg and irssi
+\texttt{execve(2)} is not even allowed. And the multi-threaded programs,
+all of them.
 
 \begin{lstlisting}
- 49777 irssi
- 64699 /usr/X11R6/bin/X
+| 49777 irssi|
+| 64699 /usr/X11R6/bin/X|
 \end{lstlisting}
 
 \section*{The Replacements}
 
-Assuming, hypothetically, that we are on some sort of unix that runs
-memory-intensive processes with heavy multithreading that also need to
-fork, what are we to replace fork with? The paper indicates
+So what are we to replace \texttt{fork} with? The paper indicates
 \texttt{posix\_spawn}, which is ``not a complete replacement for fork
 and exec\ldots it\ldots lacks an effective error reporting
 mechanism''\citep[p.5]{Hotos2019}. Perhaps someone could spend time
@@ -140,28 +152,32 @@ any regressions (wait, are there even tests?), the documentation
 updated, etc.--to use \texttt{posix\_spawn} and then process startup
 might be a bit faster? Is this even a problem? \texttt{vim(1)} is slow
 to come up cold off of disk, but that's mostly due to the spinning metal
-hard drive and the 0.8 GHz CPU running OpenBSD, an OS well noted
-for its speed. Here are some hot cache forks and execs:
+hard drive and the 0.8 GHz CPU running OpenBSD, an OS well noted for its
+speed. Here are some hot cache forks and execs:
 
 \begin{lstlisting}
-$ |\textbf{repeat 3 time vim -c quit}|
-        0.11 real         0.08 user         0.03 sys
-        0.11 real         0.09 user         0.02 sys
-        0.11 real         0.08 user         0.03 sys
-$ |\textbf{highcpu}|
-$ |\textbf{repeat 3 time vim -c quit}|
-        0.04 real         0.04 user         0.01 sys
-        0.04 real         0.03 user         0.01 sys
-        0.05 real         0.04 user         0.01 sys
+|\symbol{36} \textbf{repeat 3 time vim \symbol{45}c quit}|
+| \ \ \ \ \ \ \ 0.11 real \ \ \ \ \ \ \ \ 0.08 user \ \ \ \ \ \ \ \ 0.03 sys|
+| \ \ \ \ \ \ \ 0.11 real \ \ \ \ \ \ \ \ 0.09 user \ \ \ \ \ \ \ \ 0.02 sys|
+| \ \ \ \ \ \ \ 0.11 real \ \ \ \ \ \ \ \ 0.08 user \ \ \ \ \ \ \ \ 0.03 sys|
+|\symbol{36} \textbf{highcpu}|
+|\symbol{36} \textbf{repeat 3 time vim \symbol{45}c quit}|
+| \ \ \ \ \ \ \ 0.04 real \ \ \ \ \ \ \ \ 0.04 user \ \ \ \ \ \ \ \ 0.01 sys|
+| \ \ \ \ \ \ \ 0.04 real \ \ \ \ \ \ \ \ 0.03 user \ \ \ \ \ \ \ \ 0.01 sys|
+| \ \ \ \ \ \ \ 0.05 real \ \ \ \ \ \ \ \ 0.04 user \ \ \ \ \ \ \ \ 0.01 sys|
 \end{lstlisting}
 
 How would \texttt{posix\_spawn} help here? A migration is a non-starter
 if you need that error reporting, or otherwise looks to be of moderate
-effort and low reward. Perhaps if \texttt{vim(1)} were being spawned
-often from software with excessive memory use? But why run such? Why not
-launch \texttt{vim(1)} from a small, fast shell?
+effort and low reward. OpenBSD shows zero use of \texttt{posix\_spawn}
+outside of LLVM and libc under \texttt{/usr/src}. They probably have
+more important things to work on. I first heard of \texttt{posix\_spawn}
+during a job interview. The question came from a Windows systems
+administrator. Perhaps if \texttt{vim(1)} were being spawned often from
+software with excessive memory use? But why run such? Why not launch
+\texttt{vim(1)} from a small, fast shell?
 
-\section*{An Aside with \texttt{nmap}}
+\subsection*{An Aside with \texttt{nmap}}
 
 I did once have a problem with launching many \texttt{nmap(1)}
 processes; I was testing a LDAP server, where lots of connections (or
@@ -170,20 +186,21 @@ only in production, and never in the test environment. The test script
 probably looked something like:
 
 \begin{lstlisting}
-for i in ...; do nmap ... & done
+|for i in ...; do nmap ... \symbol{38} done|
 \end{lstlisting}
 
 Except it was much less pretty, maybe with a \texttt{wait} and a second
-loop to keep spawning more nmaps. Did I rewrite this slow thing to use
+loop to keep spawning more nmaps. This obviously was a lot of forks and
+obviously was quite slow. Did I rewrite this slow thing to use
 \texttt{posix\_spawn}? Nope. I wrote a new script--two actually--that
 performed a test inside a very tight loop in a single process. The shell
 forked and execed these test programs, and LDAP fell over. Success!
 Where would \texttt{posix\_spawn} help? Maybe to shave off some script
-startup time? Noise, compared to converting a quick ``I have an
-idea\ldots'' mess of a shell pipeline (the prototype) into a pair of
-very fast test scripts (a first implementation).
+startup time? Noise, compared to converting a quick (but slow to run)
+``I have an idea\ldots'' shell one-liner--the prototype--into a pair of
+very fast test scripts--a first implementation.
 
-\section*{Back to the so-called Alternatives}
+\subsection*{More Alternatives}
 
 vfork(2) is mentioned as an alternative BSD thing. Let's read the
 fine manual.
@@ -240,7 +257,8 @@ problems as fork''\citep[p.6]{Hotos2019}. \\
 
 To conclude, there are simply not any viable alternatives; the call to
 ``strongly discourage'' the use of fork in new code is both laughable
-and absurd. Why not simply use \texttt{fork()} in a small and fast
+and absurd.\footnote{Or is FUD from a company known for spreading
+that\ldots} Why not simply use \texttt{fork()} in a small and fast
 single threaded processes\ldots oh wait, the authors did realize that.
 In hindsight.
 
