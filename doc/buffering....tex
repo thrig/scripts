@@ -1,0 +1,671 @@
+\documentclass[10pt,a4paper]{article}
+\setlength{\topmargin}{-5mm}
+\setlength{\textheight}{244mm}
+\setlength{\oddsidemargin}{0mm}
+\setlength{\textwidth}{165mm}
+
+\setlength{\parindent}{0pt}
+
+\usepackage{fancyvrb}
+\DefineVerbatimEnvironment{verbatim}{Verbatim}{xleftmargin=4mm}
+
+\usepackage{lmodern}
+\usepackage[T1]{fontenc}
+\usepackage{pxfonts}
+\usepackage{textcomp}
+
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily,
+escapeinside={||}}
+
+\frenchspacing
+
+\title{Buffering... Buffering... Buffering...}
+\author{Jeremy Mates}
+\date{June 27, 2021}
+
+\usepackage{hyperref}
+\hypersetup{pdfauthor={Jeremy Mates},pdftitle={Buffering... Buffering... Buffering...}}
+
+\begin{document}
+\maketitle
+
+To recap \texttt{setbuf(3)}, there are three forms of stream buffering
+available in the standard library: block, line, and unbuffered. Standard
+error is unbuffered. Standard out is line buffered if the output is to a
+terminal, or block buffered otherwise. Buffering is most apparent when
+the expected output does not appear, usually when one has switched from
+writing to the terminal to a file or pipe. This changes the buffering
+from line-based to block.
+
+\begin{lstlisting}
+|\symbol{36} \textbf{perl \symbol{45}E 'say "hi"; sleep 7'}|
+|hi|
+|\symbol{94}C|
+|\symbol{36} \textbf{perl \symbol{45}E 'say "hi"; sleep 7' \symbol{62} out \symbol{38}}|
+|\symbol{91}1\symbol{93} 56029|
+|\symbol{36} \textbf{cat out}|
+|\symbol{36} \textbf{cat out}|
+|\symbol{36} \textbf{sleep 10 \symbol{38}\symbol{38} cat out}|
+|hi|
+|\symbol{91}1\symbol{93} + Done \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ perl \symbol{45}E say "hi"; sleep|
+\end{lstlisting}
+
+Where was the output? Stuck in a buffer flushed only when the program
+exited. Some programs have flags to line or unbuffer their output
+(\texttt{tcpdump \symbol{45}l}); programming language support for what
+\texttt{setbuf(3)} and \texttt{fflush(3)} provide varies from complete
+(TCL) to utterly lacking (the shell). Other options include
+\texttt{unbuffer(1)} or \texttt{stdbuf(1)}. Buffered output risks being
+lost should the buffer not be flushed--so why not unbuffer everything?
+Because unbuffered output can be inefficient. \\
+
+Causes of lost output vary from \texttt{kill \symbol{45}9}
+
+\begin{lstlisting}
+|\symbol{36} \textbf{python \symbol{45}c 'import time;print "ugh";time.sleep(99)' \symbol{62}out \symbol{38}}|
+|\symbol{91}1\symbol{93} 63787|
+|\symbol{36} \textbf{kill \symbol{45}9 \symbol{36}!}|
+|\symbol{36} \textbf{cat out}|
+|\symbol{91}1\symbol{93} + Killed \ \ \ \ \ \ \ \ \ \ \ \ \ \ python \symbol{45}c import time;pr|
+|\symbol{36} \textbf{wc \symbol{45}c out}|
+| \ \ \ \ \ \ 0 out|
+\end{lstlisting}
+
+to more subtle issues that may require \texttt{flush} or \texttt{close}
+calls to avoid losing output:
+
+\begin{lstlisting}
+|\symbol{36} \textbf{ruby \symbol{45}e 'puts "hi"; exec "echo hi"'}|
+|hi|
+|hi|
+|\symbol{36} \textbf{ruby \symbol{45}e 'puts "hi"; exec "echo hi"' \symbol{124} grep hi}|
+|hi|
+|\symbol{36} \textbf{ruby \symbol{45}e 'puts "hi"; STDOUT.flush; exec "echo hi"' \symbol{124} grep hi}|
+|hi|
+|hi|
+\end{lstlisting}
+
+The first command uses line-based buffering because output is to the
+terminal; data is lost in the second case as the block-based buffer
+piping to \texttt{grep} is not flushed prior to the \texttt{exec}. The
+third command avoids this loss. Buffering issues may also occur across
+\texttt{fork(2)} where both the existing parent and new child share the
+same data.
+
+\lstinputlisting{code/buffork.c}
+
+The code appears to be correct when the output is to the terminal, yet
+duplicates data under block-based buffering:
+
+\begin{lstlisting}
+|\symbol{36} \textbf{make buffork}|
+|cc \ \ \ \ buffork.c \ \ \symbol{45}o buffork|
+|\symbol{36} \textbf{./buffork}|
+|buffered in 65741|
+|after in 65741|
+|after in 65742|
+|\symbol{36} \textbf{./buffork \symbol{62} out ; cat out}|
+|buffered in 65744|
+|after in 65744|
+|buffered in 65744|
+|after in 65745|
+\end{lstlisting}
+
+As with the previous case, a \texttt{fflush(3)} prior to the
+\texttt{fork} will avoid this issue. Another design would be to have the
+parent emit nothing to standard output, or to only emit data after the
+child processes have all been forked. Or to unbuffer standard output.
+
+\subsection*{Mixed Buffer Calls}
+
+A single process can create the same error should buffered and
+unbuffered system calls be mixed,
+
+\lstinputlisting{code/mixbuf.c}
+
+which when compiled and run shows
+
+\begin{lstlisting}
+|\symbol{36} \textbf{make mixbuf}|
+|cc \ \ \ \ mixbuf.c \ \ \symbol{45}o mixbuf|
+|\symbol{36} \textbf{./mixbuf}|
+|duck|
+|duck|
+|goose|
+|\symbol{36} \textbf{./mixbuf \symbol{62} out ; cat out}|
+|goose|
+|duck|
+|duck|
+\end{lstlisting}
+
+The \texttt{puts(3)} call buffers while \texttt{write(2)} does not. This
+can be avoided by not mixing unbuffered and buffered calls (hint:
+\texttt{FILE *} system calls buffer; \texttt{int fd} ones do not).
+
+\section*{Standard Input}
+
+Buffering may also come into play on standard input. Consider the
+following contrived program which intends to read a total of eight
+characters, four prior to an \texttt{exec} of itself and four more
+afterwards.
+
+\lstinputlisting{code/readfour.c}
+
+This results in no input to the replacement process.
+
+\begin{lstlisting}
+|\symbol{36} \textbf{make readfour}|
+|cc \symbol{45}O2 \symbol{45}pipe \ \ \ \symbol{45}o readfour readfour.c|
+|\symbol{36} \textbf{printf asdfasdf \symbol{124} ./readfour}|
+|./readfour \symbol{62}asdf\symbol{60}|
+|./replace \symbol{62}\symbol{60}|
+\end{lstlisting}
+
+Buffering is to blame; if run under \texttt{strace} the trace can be
+searched for the string \texttt{asdf} (the ``known string search
+pattern'' pattern).
+
+\begin{lstlisting}
+|\symbol{36} \textbf{printf asdfasdf \symbol{124} strace \symbol{45}f \symbol{45}o rrr ./readfour}|
+|...|
+|\symbol{36} \textbf{grep asdf rrr}|
+|22059 read(0, "asdfasdf", 4096) \ \ \ \ \ \ \ \ \ \ = 8|
+|22059 write(1, "./readfour 'asdf'\symbol{92}n", 18) = 18|
+\end{lstlisting}
+
+Are there any other \texttt{read(2)} calls made?
+
+\begin{lstlisting}
+|\symbol{36} \textbf{fgrep 'read(0,' rrr}|
+|22059 read(0, "asdfasdf", 4096) \ \ \ \ \ \ \ \ = 8|
+|22059 read(0, "", 4096) \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ = 0|
+|\symbol{36}|
+\end{lstlisting}
+
+the first \texttt{read} captures the entire eight bytes of input. It
+actually asked for 4096, but had to settle for less. This leaves nothing
+for the second \texttt{read} in the replacement code. With sufficient
+padding to fill the buffer of the first \texttt{read}, the second
+\texttt{read} will obtain input:
+
+\begin{lstlisting}
+|\symbol{36} \textbf{perl \symbol{45}e 'print "a"x4096; print "bbbb"' \symbol{124} ./readfour}|
+|./readfour 'aaaa'|
+|replace 'bbbb'|
+\end{lstlisting}
+
+One workaround is to use an unbuffered \texttt{read} to only read four
+bytes. Unbuffered and buffered reads should probably not be mixed on the
+same stream.
+
+\begin{lstlisting}
+| \ \ \ read(STDIN\symbol{95}FILENO, buf, 4);|
+\end{lstlisting}
+
+Input may not be of fixed length. In that case the initial code will
+need to do single character \texttt{read} calls until it reaches some
+record boundary (say, a newline), or it could instead use \texttt{fgets}
+and then call \texttt{fseek(3)} to reposition the file pointer back to
+that record boundary (assuming the file handle is seekable). Let's take
+a look at how shells use both of these methods to read input.
+
+\section*{Seek}
+
+With an \texttt{input} file containing shell commands
+
+\begin{lstlisting}
+|\symbol{36} \textbf{cat input}|
+|echo a|
+|echo bb|
+|echo ccc|
+\end{lstlisting}
+
+\texttt{strace} will reveal differences in how shells read input. First,
+the traditional \texttt{sh} as provided by \texttt{dash} or busybox
+systems (such as on Alpine Linux but not \texttt{bash} pretending to be
+\texttt{sh}):
+
+\begin{lstlisting}
+|\symbol{36} \textbf{strace \symbol{45}o outsh \symbol{45}e trace=desc sh \symbol{60} input \symbol{62}/dev/null}|
+|\symbol{36} \textbf{egrep 'read\symbol{124}seek' outsh}|
+|read(0, "echo a\symbol{92}necho bb\symbol{92}necho ccc\symbol{92}n", 1023) = 24|
+|read(0, "", 1023) \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ = 0|
+\end{lstlisting}
+
+So, a complete \texttt{read} of the \texttt{input}, then a second
+\texttt{read} that triggers the \texttt{EOF} return value of \texttt{0}.
+Here is \texttt{ksh} reading the same file (note that \texttt{ksh} may
+instead be available as \texttt{mksh} or \texttt{pdksh}).
+
+\begin{lstlisting}
+|\symbol{36} \textbf{strace \symbol{45}o outksh \symbol{45}e trace=desc ksh \symbol{60} input \symbol{62}/dev/null}|
+|\symbol{36} \textbf{egrep 'read\symbol{124}seek' outksh}|
+|read(0, "echo a\symbol{92}necho bb\symbol{92}necho ccc\symbol{92}n", 512) = 24|
+|lseek(0, \symbol{45}17, SEEK\symbol{95}CUR) \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ = 7|
+|read(0, "echo bb\symbol{92}necho ccc\symbol{92}n", 512) \ \ \ \ = 17|
+|lseek(0, \symbol{45}9, SEEK\symbol{95}CUR) \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ = 15|
+|read(0, "echo ccc\symbol{92}n", 512) \ \ \ \ \ \ \ \ \ \ \ \ \ = 9|
+|read(0, "", 512) \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ = 0|
+\end{lstlisting}
+
+Quite different; a 512-byte \texttt{read} is attempted, then
+\texttt{ksh} seeks backwards by 17 or then by 9 characters; these place
+the file pointer at the beginning of the 2nd and 3rd lines,
+respectively. \texttt{ksh} then re-reads from the start of each new
+line. If the input is unseekable \texttt{ksh} will instead read by
+single characters:
+
+\begin{lstlisting}
+|\symbol{36} \textbf{ruby \symbol{45}e 'puts "echo a\symbol{92}necho bb"' \symbol{124} strace \symbol{45}o qq ksh}|
+|a|
+|bb|
+|\symbol{36} \textbf{egrep 'read\symbol{124}seek' qq}|
+|read(0, "e", 1) \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ = 1|
+|read(0, "c", 1) \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ = 1|
+|read(0, "h", 1) \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ = 1|
+|...|
+\end{lstlisting}
+
+By the way, the \texttt{strace ... \symbol{60} input} form works because
+\texttt{strace} ignores standard input and passes it down to the traced
+program. \texttt{strace} is thus a (mostly) transparent wrapper around
+the subsequent command. This is not the case for all commands.
+\texttt{ssh} in particular will consume standard input by default, which
+is why loops such as
+
+\begin{lstlisting}
+| \ \ while read host; do ssh \symbol{45}\symbol{45} "\symbol{36}host" "hostname \symbol{45}f"; done|
+\end{lstlisting}
+
+fail,\footnote{Please do not run \texttt{hostname -f} as \texttt{root}
+on Solaris systems. Thank you.} as the first \texttt{ssh} call will
+consume the remainder of the hosts listed on standard input. There are
+various workarounds.
+
+\begin{lstlisting}
+|\symbol{35} close stdin|
+|ssh \symbol{45}\symbol{45} "\symbol{36}host" ... \symbol{60}\symbol{38}\symbol{45}|
+
+|\symbol{35} or instruct ssh not to read from stdin|
+|ssh \symbol{45}n \symbol{45}\symbol{45} "\symbol{36}host" ...|
+\end{lstlisting}
+
+Another issue with \texttt{seek} is that file descriptors in a child
+process may point to the same underlying object used by the parent.
+This means an \texttt{lseek(2)} call in a child can affect
+subsequent IO operations by the parent. It would be best to avoid
+such designs (outside of trivia competitions) and to either have the
+parent or the child assume sole responsibility for IO that involves
+seek calls. However,
+
+\subsection*{Advanced Seek}
+
+it may be instructive to show a pair of processes that interact with the
+same file descriptor to prove that both use the same underlying object.
+This adds a wrinkle in that the two processes will need to synchronize
+their actions; by default, either the parent or child could begin
+execution first following a \texttt{fork} depending on the whims of the
+process scheduler.
+
+\lstinputlisting{code/advancedseek.c}
+
+This code uses \texttt{pipe(2)} with a blocking read in the parent until
+the child closes its side. At this point the parent should read from the
+input file from where the child moved the file pointer to with
+\texttt{lseek(2)}.
+
+\begin{lstlisting}
+|\symbol{36} \textbf{make advancedseek}|
+|cc \ \ \ \ advancedseek.c \ \ \symbol{45}o advancedseek|
+|\symbol{36} \textbf{printf 'more than seven characters' \symbol{62} input}|
+|\symbol{36} \textbf{./advancedseek \symbol{60} input}|
+|read 'racters'|
+\end{lstlisting}
+
+If the child and parent file descriptors were independent the parent
+would instead have read from the beginning of the file. This while
+perhaps interesting has taken us slightly adrift from buffers.
+
+\section*{Language Support for Buffering}
+
+Above I mentioned that language support for \texttt{setbuf(3)} and
+\texttt{fflush(3)} ranges from complete to not at all, for example
+
+\begin{itemize}
+\item Perl offers an \texttt{\symbol{36}fh\symbol{45}\symbol{62}autoflush} toggle to buffer or not; there are also \texttt{flush} and \texttt{sync} methods that operate at the perlio and lower OS levels; see \texttt{IO::Handle} for details.
+\item Ruby copies Perl with options to flush, flush by default, and \texttt{sync} or \texttt{fsync} methods for either the Ruby buffers or lower OS levels.
+\item TCL - \texttt{chan(n)} lists \texttt{chan \symbol{36}fh configure \symbol{45}buffering ...} as supporting \texttt{none}, \texttt{line}, or \texttt{full}, and also offers \texttt{chan flush \symbol{36}fh} for an immediate flush.
+\end{itemize}
+
+Notably absent is buffering support in the shell; this leads to various
+programs perhaps having a flag to influence buffering--as mentioned
+before, \texttt{tcpdump \symbol{45}l}. Another option, maybe, is thus
+\texttt{stdbuf(1)} which in a shell pipeline may need to be applied to
+each and every program in that pipeline.
+
+\subsection*{Pitfalls of \texttt{stdbuf(1)}}
+
+\texttt{stdbuf(1)} advertises the ability to "run a command, with
+modified buffering operations for its standard streams." Sounds great!
+Language X or program Y lack options to adjust the buffering, and
+\texttt{stdbuf} claims that it can. So what's not to like? How is a
+parent process even able to influence how a subsequent child process
+handles buffering? Let's peek at the \texttt{stdbuf} source code\ldots
+
+\begin{lstlisting}
+|...|
+|static void|
+|set\symbol{95}LD\symbol{95}PRELOAD (void)|
+|\symbol{123}|
+|...|
+\end{lstlisting}
+
+Support for this method may well depend on your feelings on monkey
+patching programs with new code that introduces new behavior. And there
+can be problems regardless; processes that maintain their own buffer
+will not be influenced by this, or \texttt{LD\symbol{95}PRELOAD}
+hopefully will not be allowed anywhere \texttt{sudo} is involved, nor
+hopefully will the changed behavior run afoul any security
+policies\ldots
+
+\section*{How to Shoot Performance In the Foot}
+
+Inefficient code is fortunately for this section quite easy to write; we
+need only remove buffering and operate byte by byte for the task of
+printing 9,999 \texttt{a} to standard output. Here is
+\texttt{maxcalls.asm} that does that.
+
+\lstinputlisting{code/maxcalls.asm}
+
+Linux does not change \texttt{R12} nor the other registers used during
+the \texttt{syscall}--see the ``System V Application Binary Interface''
+for details--so we can get away with a fairly tight loop that decrements
+\texttt{R12} to zero. By contrast, the more efficient
+\texttt{mincalls.asm} places all 9999 \texttt{a} into the program itself
+and prints them with a single \texttt{sys\symbol{95}write} call.
+
+\lstinputlisting{code/mincalls.asm}
+
+How do the benchmarks compare between these two rather extreme cases?
+Also--before wasting time on benchmarks, do both implementations produce
+the same and correct output? Comparison of broken or different things
+will not produce meaningful results.
+
+\begin{lstlisting}
+|\symbol{36} \textbf{nasm \symbol{45}f elf64 \symbol{45}o mincalls.o mincalls.asm}|
+|\symbol{36} \textbf{ld \symbol{45}o mincalls mincalls.o}|
+|\symbol{36} \textbf{nasm \symbol{45}f elf64 \symbol{45}o maxcalls.o maxcalls.asm}|
+|\symbol{36} \textbf{ld \symbol{45}o maxcalls maxcalls.o}|
+|\symbol{36} \textbf{./mincalls \symbol{62} a}|
+|\symbol{36} \textbf{./maxcalls \symbol{62} b}|
+|\symbol{36} \textbf{cmp a b; echo \symbol{36}?}|
+|0|
+|\symbol{36} \textbf{wc \symbol{45}c b}|
+|9999 b|
+|\symbol{36} \textbf{time for i in `jot 1000`; do ./mincalls \symbol{62} a; done}|
+
+|real \ \ \ 0m8.818s|
+|user \ \ \ 0m0.107s|
+|sys \ \ \ \ 0m0.841s|
+|\symbol{36} \textbf{time for i in `jot 1000`; do ./maxcalls \symbol{62} b; done}|
+
+|real \ \ \ 0m18.898s|
+|user \ \ \ 0m0.457s|
+|sys \ \ \ \ 0m12.030s|
+\end{lstlisting}
+
+A notable and obvious difference is the extremely high system time
+reported for \texttt{maxcalls}. This is because each byte in
+\texttt{maxcalls} triggers a system call--that is, the kernel takes
+over, performs IO on the byte, and then returns execution back to
+\texttt{maxcalls}. Again and again and again. \texttt{mincalls} is
+faster as it only makes two system calls. \texttt{strace \symbol{45}c}
+will report these numbers.
+
+\begin{lstlisting}
+|\symbol{36} \textbf{strace \symbol{45}c ./mincalls \symbol{62} a}|
+|\symbol{37} \textbf{time \ \ \ seconds \ usecs/call \ \ calls \ errors syscall}|
+|\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}|
+| 96.30 \ \ 0.000052 \ \ \ \ \ \ \ \ \ 52 \ \ \ \ \ \ 1 \ \ \ \ \ \ \ \ write|
+| \ 3.70 \ \ 0.000002 \ \ \ \ \ \ \ \ \ \ 2 \ \ \ \ \ \ 1 \ \ \ \ \ \ \ \ execve|
+|\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}|
+|100.00 \ \ 0.000054 \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 2 \ \ \ \ \ \ \ \ total|
+|\symbol{36} \textbf{strace \symbol{45}c ./maxcalls \symbol{62} b}|
+|\symbol{37} \textbf{time \ \ \ seconds \ usecs/call \ \ calls \ errors syscall}|
+|\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}|
+| 99.96 \ \ 0.045516 \ \ \ \ \ \ \ \ \ \ 5 \ \ \ 9999 \ \ \ \ \ \ \ \ write|
+| \ 0.04 \ \ 0.000016 \ \ \ \ \ \ \ \ \ 16 \ \ \ \ \ \ 1 \ \ \ \ \ \ \ \ execve|
+|\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45} \symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}\symbol{45}|
+|100.00 \ \ 0.045532 \ \ \ \ \ \ \ \ \ \ \ \ \ \ 10000 \ \ \ \ \ \ \ \ total|
+\end{lstlisting}
+
+\texttt{mincalls} spends 5e-5 seconds on \texttt{write} while
+\texttt{maxcalls} uses 4e-2 or three orders of magnitude more. Another
+interesting number is the context switches; \texttt{vmstat(8)} on Linux
+will show this and other useful metrics. Assuming the benchmark takes
+longer than just a few seconds, in a second terminal window run
+
+\begin{lstlisting}
+|\symbol{36} \textbf{vmstat \symbol{45}w 1}|
+\end{lstlisting}
+
+and be sure to make the window wide enough to hold the results. Then
+re-run the benchmarks and observe the \texttt{cs}, \texttt{us},
+\texttt{sy}, and \texttt{wa} columns. Context switches and IO wait times
+are higher when \texttt{mincalls} is being run--this is because
+\texttt{mincalls} completes its work very quickly so there is more
+system activity from the shell starting new \texttt{mincalls} instances.
+\texttt{maxcalls} shows lower context switches and wait times as fewer
+instances of it are running per unit time--\texttt{maxcalls} takes
+longer to complete its work. This is why benchmarks need careful
+consideration of what is being measured and how to collect it--and how
+long to collect the data for; a benchmark of a complicated system may
+require days for the system to settle in, effects of random cron jobs to
+be seen, etc. \\
+
+An application may need to Goldilocks how much to buffer (too cold\ldots)
+versus printing often (too hot!) and may need to balance efficiency
+versus the risk of information loss should the application or system
+fail. Latency versus throughput. Unbuffered writes are typically more
+expensive though this may not matter if the logs are important, if the
+logging is of negligible overhead, or the logs are large enough such
+that they do not much benefit from buffering. Specific advice would be
+to first get the code working, second to profile it and see where it is
+slow, and third to write benchmarks to test the replacement code against
+the first draft. I will now ignore this advice.
+
+\section*{Buffer Benchmarks}
+
+A relevant question is how inefficient unbuffered logging is. Unlike the
+previous assembly code that used extremes, real application logs run
+along the lines of
+
+\begin{lstlisting}
+| \ \ \ fprintf(stderr, "\symbol{37}s: fail connect '\symbol{37}s': ...|
+\end{lstlisting}
+
+or instead an entire JSON structure or stack trace.\footnote{Java debug
+logs that fill the entire 80 gigabyte log partition two weeks after the
+production launch are not unknown in the industry.} Actual logs should
+be used, or a reasonable replication thereof. Or borrow logs from
+production--but note that some regulations frown on production logs
+being moved to test environments. \\
+
+I will also ignore this advice, and look specifically at logs of 64 or
+4096 characters, buffered or unbuffered.
+
+\lstinputlisting{code/benchlogs.tcl}
+
+This may take some time to run (it does emit \texttt{2097152*500*2}
+bytes) though perhaps less for those of you who actually use SSD drives.
+
+\begin{lstlisting}
+|\symbol{36} \textbf{expect benchlogs.tcl}|
+|\symbol{36} \textbf{ls stats.*}|
+|stats.4096.full stats.4096.none stats.64.full stats.64.none|
+|\symbol{36} \textbf{R \symbol{45}q \symbol{45}\symbol{45}silent \symbol{45}\symbol{45}no\symbol{45}save}|
+|\symbol{62} \textbf{smallfull=scan("stats.64.full")}|
+|Read 500 items|
+|\symbol{62} \textbf{smallnone=scan("stats.64.none")}|
+|Read 500 items|
+|\symbol{62} \textbf{bigfull=scan("stats.4096.full")}|
+|Read 500 items|
+|\symbol{62} \textbf{bignone=scan("stats.4096.none")}|
+|Read 500 items|
+\end{lstlisting}
+
+The TCL \texttt{time(n)} command times the execution of the writes;
+lower numbers are better. With 64 bytes the fully buffered output takes
+less time and has a lower standard deviation than the unbuffered writes.
+
+\begin{lstlisting}
+|\symbol{62} \textbf{summary(smallfull)}|
+| \ \ Min. 1st Qu. \ Median \ \ \ Mean 3rd Qu. \ \ \ Max.|
+| \ 19209 \ \ 19376 \ \ 19494 \ \ 19874 \ \ 19867 \ \ 34234|
+|\symbol{62} \textbf{summary(smallnone)}|
+| \ \ Min. 1st Qu. \ Median \ \ \ Mean 3rd Qu. \ \ \ Max.|
+| \ 78816 \ \ 79949 \ \ 80398 \ \ 80784 \ \ 80896 \ 118876|
+|\symbol{62} \textbf{sd(smallfull); sd(smallnone)}|
+|\symbol{91}1\symbol{93} 1121.129|
+|\symbol{91}1\symbol{93} 3102.511|
+\end{lstlisting}
+
+The 4096 byte unbuffered writes by contrast are only somewhat less
+efficient than the buffered writes:
+
+\begin{lstlisting}
+|\symbol{62} \textbf{summary(bigfull)}|
+| \ \ Min. 1st Qu. \ Median \ \ \ Mean 3rd Qu. \ \ \ Max.|
+| \ \ 6360 \ \ \ 6961 \ \ \ 7464 \ \ \ 7607 \ \ \ 8158 \ \ 11558|
+|\symbol{62} \textbf{summary(bignone)}|
+| \ \ Min. 1st Qu. \ Median \ \ \ Mean 3rd Qu. \ \ \ Max.|
+| \ \ 6684 \ \ \ 6994 \ \ \ 7738 \ \ \ 7871 \ \ \ 8184 \ \ 12256|
+|\symbol{62} \textbf{sd(bigfull); sd(bignone)}|
+|\symbol{91}1\symbol{93} 887.7779|
+|\symbol{91}1\symbol{93} 1020.918|
+\end{lstlisting}
+
+\section*{Buffers and Multiple Clients}
+
+Socket services suffer no less from buffering than terminal
+programs do. One example is that of multiple writers whose input is
+collected by a single listener. In one terminal, start a listener
+process. \texttt{socat} is used as \texttt{nc} may variously be
+called \texttt{netcat} or \texttt{ncat} and may not support unix
+domain sockets.
+
+\begin{lstlisting}
+|\symbol{36} \textbf{socat \symbol{45}u UNIX\symbol{45}LISTEN:thesocket,fork ./out}|
+\end{lstlisting}
+
+In another terminal in the same directory as the above, run this
+\texttt{lobber} script
+
+\begin{lstlisting}
+|\symbol{35}!/bin/sh|
+|sendaline () \symbol{123}|
+| \ \ echo "pid \symbol{36}\symbol{36} says \symbol{36}@" \symbol{124} socat \symbol{45} UNIX\symbol{45}CONNECT:thesocket|
+|\symbol{125}|
+|for i in 1 2 3 4 5 6 7 8 9 0; do|
+| \ \ sendaline "\symbol{36}i" \symbol{38}|
+|done|
+|wait|
+\end{lstlisting}
+
+which should send 10 lines to the listener, and from there into the
+\texttt{out} file.
+
+\begin{lstlisting}
+|\symbol{36} \textbf{sh lobber}|
+|\symbol{36} \textbf{cat out}|
+|pid 77487 says 5|
+|pid 77487 says 2|
+|pid 77487 says 3|
+|pid 77487 says 1|
+|pid 77487 says 0|
+|pid 77487 says 7|
+|pid 77487 says 4|
+|pid 77487 says 9|
+|pid 77487 says 6|
+|pid 77487 says 8|
+\end{lstlisting}
+
+The input is out of order (at the whim of the job scheduler) but all the
+lines are complete. So where is the buffering problem? We need to send
+more to the listener. A lot more.
+
+\begin{lstlisting}
+|\symbol{35}!/usr/bin/env expect|
+|for \symbol{123}set i 0\symbol{125} \symbol{123}\symbol{36}i \symbol{60} 25\symbol{125} \symbol{123}incr i\symbol{125} \symbol{123}|
+| \ \ \ set pid \symbol{91}fork\symbol{93}|
+| \ \ \ if \symbol{123}\symbol{36}pid == \symbol{45}1\symbol{125} \symbol{123} puts stderr "fork failed"; exit 1 \symbol{125}|
+| \ \ \ if \symbol{123}\symbol{36}pid != 0\symbol{125} \symbol{123} continue \symbol{125}|
+| \ \ \ set fh \symbol{91}open "\symbol{124} socat \symbol{45} UNIX\symbol{45}CONNECT:thesocket" w\symbol{93}|
+| \ \ \ chan configure \symbol{36}fh \symbol{45}buffering none|
+| \ \ \ set char \ \ \ \symbol{91}format \symbol{37}c \symbol{91}expr 97 + \symbol{36}i\symbol{93}\symbol{93}|
+| \ \ \ set teststr \symbol{91}string repeat \symbol{36}char 9999\symbol{93}|
+| \ \ \ for \symbol{123}set rep 100\symbol{125} \symbol{123}\symbol{36}rep \symbol{62} 0\symbol{125} \symbol{123}incr rep \symbol{45}1\symbol{125} \symbol{123}|
+| \ \ \ \ \ \ \ puts \symbol{45}nonewline \symbol{36}fh \symbol{36}teststr|
+| \ \ \ \symbol{125}|
+| \ \ \ exit 0|
+|\symbol{125}|
+|wait \symbol{45}i \symbol{45}1|
+\end{lstlisting}
+
+This version forks 25 times and generates strings 9,999 characters long,
+each child using a unique ASCII letter. The strings are sent 100 times
+each, no buffering. Be sure to empty the old \texttt{out} file.
+
+\begin{lstlisting}
+|\symbol{36} \textbf{:\symbol{62} out}|
+|\symbol{36} \textbf{expect lobber.tcl}|
+|\symbol{36} \textbf{wc \symbol{45}c out}|
+| 24997500 out|
+|\symbol{36} \textbf{echo \symbol{36}((9999*100*25))}|
+|24997500|
+\end{lstlisting}
+
+That is the expected number of characters. \texttt{out} is however
+rather awkward to parse or display. The expected output is
+contiguous blocks of 9,999 unique characters in some unknown
+ordering. What does the file actually contain? Some C can tally the
+contiguous character counts.
+
+\lstinputlisting{code/charcounter.c}
+
+This reveals runs of 8,192 characters, not 9,999 (and \texttt{strace}
+will confirm this as the buffer size):
+
+\begin{lstlisting}
+|\symbol{36} \textbf{make charcounter}|
+|cc \ \ \ \ charcounter.c \ \ \symbol{45}o charcounter|
+|\symbol{36} \textbf{./charcounter \symbol{60} out \symbol{124} head \symbol{45}3}|
+|8192 a|
+|8192 b|
+|8192 a|
+|\symbol{36} \textbf{./charcounter \symbol{60} out \symbol{124} tail \symbol{45}3}|
+|476 n|
+|476 u|
+|476 o|
+\end{lstlisting}
+
+The trailing 476 byte counts come from the remainder
+
+\begin{lstlisting}
+|\symbol{36} \textbf{echo \symbol{36}(( 9999 * 100 / 8192 ))}|
+|122|
+|\symbol{36} \textbf{echo \symbol{36}(( 9999 * 100 \symbol{45} 8192 * 122 ))}|
+|476|
+\end{lstlisting}
+
+Thus with sufficiently large input otherwise invisible buffers can be
+overrun and the output corrupted--a different design would be required
+here to collect the input from multiple sources into a single file. \\
+
+The above shows the need for careful design and testing of code,
+especially given that different buffering methods are used depending on
+the context or system calls involved, or where the file descriptors are
+shared between processes and used by both, or \ldots
+
+\end{document}

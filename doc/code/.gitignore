@@ -1,4 +1,14 @@
 *.o
+advancedseek
+buffork
+charcounter
 envdup
+maxcalls
+mincalls
 minexec
 minsys
+mixbuf
+readfour
+scratch
+stats.*
+thesocket
